@@ -1,0 +1,53 @@
+{
+  "name": "central-tecnica",
+  "productName": "Central Técnica",
+  "version": "45.0.0",
+  "description": "Central Técnica by Don — pré-produção de broadcast",
+  "author": "Don",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "scripts": {
+    "fonts": "node scripts/fonts.js",
+    "start": "npm run fonts && electron .",
+    "dist": "npm run fonts && electron-builder --publish never"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@fontsource-variable/archivo": "^5.0.0",
+    "@fontsource/jetbrains-mono": "^5.0.0",
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "br.com.don.centraltecnica",
+    "productName": "Central Técnica",
+    "copyright": "Central Técnica by Don",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "app/**/*"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Central Técnica",
+      "artifactName": "Central-Tecnica-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "artifactName": "Central-Tecnica-${version}-mac.${ext}",
+      "title": "Central Técnica"
+    }
+  }
+}
