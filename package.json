@@ -9,9 +9,12 @@
   "scripts": {
     "fonts": "node scripts/fonts.js",
     "start": "npm run fonts && electron .",
-    "dist": "npm run fonts && electron-builder --publish never"
+    "dist": "npm run fonts && electron-builder --publish never",
+    "release": "npm run fonts && electron-builder --publish always"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
   "devDependencies": {
     "@fontsource-variable/archivo": "^5.0.0",
     "@fontsource/jetbrains-mono": "^5.0.0",
@@ -22,10 +25,24 @@
     "appId": "br.com.don.centraltecnica",
     "productName": "Central Técnica",
     "copyright": "Central Técnica by Don",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["main.js", "preload.js", "app/**/*"],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*"
+    ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png"
     },
     "nsis": {
@@ -38,16 +55,34 @@
       "artifactName": "Central-Tecnica-Setup-${version}.${ext}"
     },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
       "category": "public.app-category.productivity",
       "icon": "build/icon.png",
       "identity": "-",
       "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "artifactName": "Central-Tecnica-${version}-mac.${ext}"
     },
     "dmg": {
       "artifactName": "Central-Tecnica-${version}-mac.${ext}",
       "title": "Central Técnica"
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "draft"
     }
   }
 }

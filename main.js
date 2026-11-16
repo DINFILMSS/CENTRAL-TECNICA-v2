@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { pathToFileURL } = require('url');
+let updater = null;
+try { updater = require('electron-updater').autoUpdater; } catch (e) { updater = null; }
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
@@ -78,12 +80,70 @@ ipcMain.handle('pdf:save', async (e, html, name) => {
   } finally { pw.destroy(); try { fs.unlinkSync(tmp); } catch (err) {} }
 });
 
+
+/* ---------- atualização automática ---------- */
+// Windows: baixa sozinho e pergunta se pode reiniciar. Mac: avisa e abre a página de download
+// (a instalação silenciosa no Mac exige certificado pago da Apple).
+const IS_MAC = process.platform === 'darwin';
+let manualCheck = false, updateReady = null;
+function releasesURL() {
+  try {
+    const y = fs.readFileSync(path.join(process.resourcesPath, 'app-update.yml'), 'utf8');
+    const o = (y.match(/owner:\s*['"]?([^\s'"]+)/) || [])[1], r = (y.match(/repo:\s*['"]?([^\s'"]+)/) || [])[1];
+    if (o && r) return `https://github.com/${o}/${r}/releases/latest`;
+  } catch (e) {}
+  return null;
+}
+function box(o) { return win ? dialog.showMessageBox(win, o) : dialog.showMessageBox(o); }
+function askRestart(v) {
+  box({ type: 'info', buttons: ['Reiniciar e atualizar', 'Depois'], defaultId: 0, cancelId: 1, title: 'Atualização pronta',
+    message: `A versão ${v} da Central Técnica já foi baixada.`,
+    detail: 'Reinicie para usar a versão nova. Se escolher “Depois”, ela é instalada quando você fechar o app. Seus projetos continuam salvos.' })
+    .then(r => { if (r.response === 0) { if (win) win.webContents.send('menu', 'flush'); setTimeout(() => updater.quitAndInstall(false, true), 400); } });
+}
+function setupUpdater() {
+  if (!updater || !app.isPackaged) return;
+  updater.autoDownload = !IS_MAC;
+  updater.autoInstallOnAppQuit = !IS_MAC;
+  updater.on('update-available', info => {
+    if (IS_MAC) {
+      box({ type: 'info', buttons: ['Abrir página de download', 'Depois'], defaultId: 0, cancelId: 1, title: 'Atualização disponível',
+        message: `A versão ${info.version} da Central Técnica está disponível.`,
+        detail: `Você está na ${app.getVersion()}. Baixe o arquivo .dmg, abra e arraste a Central Técnica para Aplicativos, substituindo a anterior. Seus projetos continuam salvos.` })
+        .then(r => { if (r.response === 0) { const u = releasesURL(); if (u) shell.openExternal(u); } });
+    } else if (manualCheck) {
+      box({ type: 'info', buttons: ['OK'], title: 'Atualização disponível', message: `Baixando a versão ${info.version}…`, detail: 'Avisamos quando estiver pronta para instalar.' });
+    }
+    manualCheck = false;
+  });
+  updater.on('download-progress', p => { if (win) win.setProgressBar(Math.max(0.02, (p.percent || 0) / 100)); });
+  updater.on('update-downloaded', info => { if (win) win.setProgressBar(-1); updateReady = info.version; askRestart(info.version); });
+  updater.on('update-not-available', () => {
+    if (manualCheck) box({ type: 'info', buttons: ['OK'], title: 'Central Técnica', message: 'Você já está na versão mais recente.', detail: `Versão ${app.getVersion()}` });
+    manualCheck = false;
+  });
+  updater.on('error', err => {
+    if (win) win.setProgressBar(-1);
+    if (manualCheck) box({ type: 'warning', buttons: ['OK'], title: 'Não foi possível procurar atualizações', message: 'Confira a conexão com a internet e tente de novo.', detail: String(err && err.message || err).slice(0, 300) });
+    manualCheck = false;
+  });
+  const check = () => updater.checkForUpdates().catch(() => {});
+  setTimeout(check, 8000);
+  setInterval(check, 4 * 60 * 60 * 1000);
+}
+function checkUpdatesNow() {
+  if (!updater || !app.isPackaged) { box({ type: 'info', buttons: ['OK'], title: 'Central Técnica', message: 'A atualização automática só funciona no app instalado.' }); return; }
+  if (updateReady) { askRestart(updateReady); return; }
+  manualCheck = true;
+  updater.checkForUpdates().catch(() => {});
+}
+
 /* ---------- menus ---------- */
 function send(cmd) { if (win) win.webContents.send('menu', cmd); }
 function buildMenu() {
   const isMac = process.platform === 'darwin';
   const tpl = [
-    ...(isMac ? [{ label: 'Central Técnica', submenu: [{ role: 'about', label: 'Sobre a Central Técnica' }, { type: 'separator' }, { role: 'hide', label: 'Ocultar' }, { role: 'hideOthers', label: 'Ocultar outros' }, { type: 'separator' }, { role: 'quit', label: 'Sair' }] }] : []),
+    ...(isMac ? [{ label: 'Central Técnica', submenu: [{ role: 'about', label: 'Sobre a Central Técnica' }, { label: 'Procurar atualizações…', click: () => checkUpdatesNow() }, { type: 'separator' }, { role: 'hide', label: 'Ocultar' }, { role: 'hideOthers', label: 'Ocultar outros' }, { type: 'separator' }, { role: 'quit', label: 'Sair' }] }] : []),
     { label: 'Arquivo', submenu: [
       { label: 'Novo projeto', accelerator: 'CmdOrCtrl+N', click: () => send('newproj') },
       { label: 'Abrir backup…', accelerator: 'CmdOrCtrl+O', click: () => send('backup-open') },
@@ -107,7 +167,7 @@ function buildMenu() {
       { type: 'separator' }, { role: 'togglefullscreen', label: 'Tela cheia' }
     ] },
     { label: 'Janela', submenu: [{ role: 'minimize', label: 'Minimizar' }, { role: 'close', label: 'Fechar' }] },
-    { label: 'Ajuda', submenu: [{ label: 'Mostrar ferramentas de diagnóstico', accelerator: 'CmdOrCtrl+Alt+I', click: () => win && win.webContents.toggleDevTools() }] }
+    { label: 'Ajuda', submenu: [{ label: `Versão ${app.getVersion()}`, enabled: false }, { label: 'Procurar atualizações…', click: () => checkUpdatesNow() }, { label: 'Página de downloads', click: () => { const u = releasesURL(); if (u) shell.openExternal(u); } }, { type: 'separator' }, { label: 'Mostrar ferramentas de diagnóstico', accelerator: 'CmdOrCtrl+Alt+I', click: () => win && win.webContents.toggleDevTools() }] }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(tpl));
 }
@@ -120,6 +180,7 @@ app.whenReady().then(() => {
   });
   buildMenu();
   createWindow();
+  setupUpdater();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
