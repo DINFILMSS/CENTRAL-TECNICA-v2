@@ -1,14 +1,49 @@
 name: Gerar instaladores
 
+# Toda vez que o package.json muda (número da versão) na branch main, gera os instaladores
+# e publica uma nova versão em "Releases". Os apps já instalados se atualizam a partir dela.
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths: ['package.json']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    outputs:
+      versao: ${{ steps.v.outputs.versao }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: echo "versao=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Criar rascunho da versão
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.v.outputs.versao }}
+        run: |
+          if gh release view "v$V" --repo "$GITHUB_REPOSITORY" --json isDraft -q .isDraft > estado.txt 2>/dev/null; then
+            if [ "$(cat estado.txt)" = "false" ]; then
+              echo "::error::A versão $V já foi publicada. Aumente o número em \"version\" no package.json (ex.: 45.1.0 -> 45.2.0) e salve de novo."
+              exit 1
+            fi
+            echo "Rascunho v$V já existe, reaproveitando."
+          else
+            gh release create "v$V" --repo "$GITHUB_REPOSITORY" --draft --title "Central Técnica $V" \
+              --notes "Windows: baixe o arquivo **Central-Tecnica-Setup-$V.exe**. Mac: baixe o **Central-Tecnica-$V-mac.dmg**. Quem já tem o app instalado recebe o aviso de atualização automaticamente."
+          fi
+
   instalador:
+    needs: preparar
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -19,19 +54,25 @@ jobs:
           node-version: 22
       - name: Instalar dependências
         run: npm install
-      - name: Gerar instalador
-        run: npm run dist
+      - name: Apontar atualizações para este repositório
+        shell: bash
         env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.build.publish={provider:'github',owner:process.env.OWNER,repo:process.env.REPO,releaseType:'draft'};fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+      - name: Gerar e enviar instalador
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-      - name: Guardar instalador do Windows
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Central-Tecnica-Windows
-          path: dist/*.exe
-      - name: Guardar instalador do Mac
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Central-Tecnica-Mac
-          path: dist/*.dmg
+
+  publicar:
+    needs: [preparar, instalador]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publicar a versão
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ needs.preparar.outputs.versao }}
+        run: gh release edit "v$V" --repo "$GITHUB_REPOSITORY" --draft=false --latest
