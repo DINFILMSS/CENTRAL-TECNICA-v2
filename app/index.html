@@ -216,6 +216,7 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
 .rd tr.cur td{background:#1d0b0e;border-color:#5a1b24}
 .rd tr.cur td:first-child{box-shadow:inset 4px 0 0 var(--tally)}
 .rd tr.done td{opacity:.45}
+.sep tr.done td{opacity:.5}.doc td.c{text-align:center}
 .rd .idx{font:700 13px var(--mono);color:var(--mute)}
 .rd .in{background:transparent;border-color:transparent;padding:5px 6px}
 .rd .in:focus{background:var(--black);border-color:var(--phos)}
@@ -557,6 +558,7 @@ const I={
  order:'<path d="M9 5h10M9 12h10M9 19h10"/><path d="M4 4l1 1 2-2M4 11l1 1 2-2M4 18l1 1 2-2"/>',
  labels:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
  wizard:'<path d="M4 20L14 10M15 4v3M18.5 5.5l-2 2M20 9h-3M12 6.5l-2-2"/><path d="M14 10l1.5 1.5"/>',
+ box:'<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
  rack:'<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M4 8h16M4 13h16M7 5.5h2M7 10.5h2M7 15.5h2"/>',
  kit:'<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
  sheet:'<rect x="4" y="3" width="16" height="18" rx="1"/><rect x="7" y="7" width="7" height="5" rx="1"/><path d="M14 9l3-1.5v4L14 10M7 15h10M7 18h6"/>',
@@ -564,18 +566,19 @@ const I={
 };
 const ico=k=>`<svg viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
 const VIEWS=[
- ['Visão geral',[['dash','Painel do evento','dash'],['dir','Monitor da direção','mv']]],
+ ['Visão geral',[['dash','Painel do evento','dash'],['dir','Monitor da direção','mv'],['models','Modelos de evento','kit']]],
  ['Produção',[['rundown','Espelho do programa','rundown'],['crew','Equipe e intercom','crew'],['camsheets','Folhas de câmera','sheet'],['check','Checklist técnico','check']]],
  ['Engenharia de sinais',[['wizard','Gerador de patch','wizard'],['gear','Equipamentos','gear'],['kits','Kits de equipamento','kit'],['racks','Racks','rack'],['patch','Patch de sinais','patch'],['mv','Multiview','mv'],['audio','Áudio','audio']]],
  ['Integrações',[['comp','Companion','comp'],['atem','ATEM · XML','atem'],['vhub','Videohub','vhub']]],
  ['Espaço físico',[['floor','Planta e câmeras','floor'],['house','House e bancadas','house'],['cable','Passagem de cabos','cable']]],
  ['Cálculos',[['power','Energia · kVA','power'],['rec','Gravação e mídias','rec'],['order','Lista de pedido','order']]],
+ ['Logística',[['sep','Separação e retorno','check'],['inv','Estoque do depósito','box']]],
  ['Ferramentas',[['bars','Sinal de teste','bars'],['labels','Etiquetas de cabo','labels'],['report','Relatório para impressão','report'],['backup','Backup, modelos e versões','backup']]]
 ];
 let view=(location.hash||'#dash').slice(1);
 function renderRail(){
   const p=cur();
-  const badge={racks:(p.racks||[]).length||null,gear:p.gear.length,patch:p.links.length,rundown:p.rundown.length,crew:p.crew.length,check:`${p.check.filter(c=>c.done).length}/${p.check.length}`};
+  const badge={sep:(()=>{const st=sepStats(p);return st.n?`${st.out}/${st.n}`:null})(),racks:(p.racks||[]).length||null,gear:p.gear.length,patch:p.links.length,rundown:p.rundown.length,crew:p.crew.length,check:`${p.check.filter(c=>c.done).length}/${p.check.length}`};
   const warn={power:p.gear.some(g=>g.status!=='ok'&&!g.watts)};
   $('#rail').innerHTML=VIEWS.map(([g,items])=>`<h6>${g}</h6>`+items.map(([id,label,ic])=>`<button data-v="${id}" class="${view===id?'on':''}" ${view===id?'aria-current="page"':''}>${ico(ic)}<span>${label}</span>${badge[id]!=null?`<span class="badge">${badge[id]}</span>`:warn[id]?'<span class="badge warn">!</span>':''}</button>`).join('')).join('')+
   `<div class="foot">${DESK?"Aplicativo "+esc(DESK.info().version)+" · salvamento automático. ":""}Planejamento local e offline. Nada aqui envia comandos aos equipamentos.</div>`;
@@ -649,6 +652,10 @@ function health(p){
   if(!p.rundown.length)issues.push(['pend','Espelho do programa vazio','rundown']);
   if(!p.crew.length)issues.push(['pend','Nenhuma pessoa na equipe','crew']);
   if(ck<1)issues.push(['pend',`Checklist técnico em ${Math.round(ck*100)}%`,'check']);
+  {const st=sepStats(p);const first=(p.days||[])[0],last=(p.days||[]).slice(-1)[0];const now=Date.now();
+   if(st.n&&first&&parseYMD(first.date)-now<3*864e5&&st.out<st.n)issues.push(['pend',`${st.n-st.out} item(ns) ainda não separados`,'sep']);
+   if(st.n&&last&&now>parseYMD(last.date).getTime()+864e5&&st.out&&st.ret<st.out)issues.push(['pend',`${st.out-st.ret} item(ns) sem conferência de retorno`,'sep']);
+   if(invHas()){const nf=sepItems(p).filter(i=>i.stock&&i.stock.need>i.stock.have).length;if(nf)issues.push(['pend',`${nf} item(ns) faltando no estoque do depósito`,'inv'])}}
   const total=8;const score=Math.round(((total-issues.filter(i=>i[0]==='red').length*1.5-issues.filter(i=>i[0]==='pend').length*.6)/total)*100);
   return {issues,score:clamp(score,0,100),ck};
 }
@@ -1257,7 +1264,7 @@ R.bars=()=>{
 function beep(){try{sig.ac=sig.ac||new (window.AudioContext||window.webkitAudioContext)();const o=sig.ac.createOscillator(),g=sig.ac.createGain();o.frequency.value=1000;g.gain.value=0.126;o.connect(g).connect(sig.ac.destination);o.start();o.stop(sig.ac.currentTime+1/sig.fps*2)}catch(e){}}
 
 /* ---------- relatório (caderno técnico) ---------- */
-const RP_SECTIONS=[['sum','Resumo e pendências'],['crew','Equipe e intercom'],['rundown','Espelho do programa'],['gear','Equipamentos'],['patch','Patch de sinais'],['mv','Multiview'],['floor','Planta e câmeras'],['house','House e bancadas'],['cable','Passagem de cabos'],['power','Energia'],['order','Lista de pedido'],['audio','Áudio'],['check','Checklist técnico']];
+const RP_SECTIONS=[['sum','Resumo e pendências'],['crew','Equipe e intercom'],['rundown','Espelho do programa'],['gear','Equipamentos'],['patch','Patch de sinais'],['mv','Multiview'],['floor','Planta e câmeras'],['house','House e bancadas'],['cable','Passagem de cabos'],['power','Energia'],['order','Lista de pedido'],['audio','Áudio'],['check','Checklist técnico'],['sep','Separação de equipamentos']];
 const PSIG={SDI:'#0a9d4a',HDMI:'#0a7fc0',Fibra:'#c98200',Rede:'#7655d0','Áudio':'#c93c84',REF:'#555'};
 let rpOpts=null;
 R.report=()=>{
@@ -1288,7 +1295,8 @@ R.report=()=>{
   if($('#rpPdf'))$('#rpPdf').onclick=()=>deskPDF(`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`,`${slug(p.name)}-caderno-tecnico.pdf`);
   $('#rpPrint').onclick=()=>{$('#report').innerHTML=`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`;setTimeout(()=>{try{window.print()}catch(e){toast('Impressão indisponível aqui. Abra o arquivo HTML local.')}},60)};
 };
-const DOC_CSS=`.rkgrid{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}.rkgrid figure{width:240px;margin:0;break-inside:avoid}.rkgrid figcaption{font-size:11px;margin-top:4px}
+const DOC_CSS=`.septb{table-layout:fixed;width:100%}.septb tr.grp td{background:#eef2f0;font-weight:700;font-size:8.5pt;padding-top:5pt}.septb tr{break-inside:avoid}
+.rkgrid{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}.rkgrid figure{width:240px;margin:0;break-inside:avoid}.rkgrid figcaption{font-size:11px;margin-top:4px}
 
 .doc{--ink:#111;--soft:#555;--rule:#d5d9d6;--acc:#0a8f45;background:#fff;color:var(--ink);font:400 10pt/1.45 Archivo,Arial,sans-serif;font-stretch:100%}
 .doc-preview{background:#2a302d;border-radius:10px;padding:24px;max-height:calc(100vh - 190px);overflow:auto}
@@ -1403,6 +1411,7 @@ function buildReport(p){
   if(on.has('order')){const d=orderData(p);s+=sec('order','Lista de pedido',`<div class="two"><div><h3>Equipamentos</h3>${tb(['Modelo','Qtd'],Object.entries(d.byModel).sort((a,b)=>a[1].cat.localeCompare(b[1].cat)).map(([m,x])=>[m,x.n]),['','num r'])}</div><div><h3>Cabos (reserva ${p.orderSpare??10}%)</h3>${tb(['Tipo','Lances','Separar','Metragem'],Object.entries(d.cab).map(([t,c])=>[t,c.n,Math.ceil(c.n*d.sp),c.m?fmt(c.m*d.sp,0)+' m':'—']),['','num r','num r','num r'])}${Object.keys(d.conv).length?`<h3>Conversores</h3>${tb(['Item','Qtd'],Object.entries(d.conv),['','num r'])}`:''}${d.extras.length?`<h3>Acessórios</h3>${tb(['Item','Qtd'],d.extras.map(e=>[e.name,e.qty]),['','num r'])}`:''}<h3>Conferência no depósito</h3>${Object.keys(d.byModel).slice(0,0).join('')}<div class="lines"><div></div><div></div><div></div></div></div></div>`,brk())}
   if(secs.some(x=>x[0]==='audio')){const mi=p.audio.mx.ins.split(',').map(x=>x.trim()).filter(Boolean),mo=p.audio.mx.outs.split(',').map(x=>x.trim()).filter(Boolean);s+=sec('audio','Áudio',`<h3>Mapa de canais</h3>`+tb(['Canal','Nome','Fonte','Tipo','Stagebox','Destinos'],p.audio.ch.map((c,i)=>[String(i+1).padStart(2,'0'),H(`<b>${esc(c.name)}</b>`),c.src,c.type,c.box,c.dest]),['num'])+(Object.keys(p.audio.mx.x).length?`<h3>Matriz</h3>`+tb(['Entrada \\ Saída',...mo],mi.map((nm,r)=>[nm,...mo.map((_,c)=>p.audio.mx.x[r+':'+c]?'●':'')])):''),brk())}
   if(on.has('check')){const groups=[...new Set(p.check.map(c=>c.group))];s+=sec('check','Checklist técnico',`<div class="two">${groups.map(g=>`<div><h3>${esc(g)}</h3>${p.check.filter(c=>c.group===g).map(c=>`<div class="issue" style="gap:4pt"><span class="box">${c.done?'✓':''}</span>${esc(c.text)}</div>`).join('')}</div>`).join('')}</div>`,brk())}
+  if(secs.some(x=>x[0]==='sep')&&sepItems(p).length)s+=sec('sep','Separação de equipamentos',sepReportHTML(p,tb,H),brk());
   if(o.sign)s+=`<section class="pb"><h2 class="sec"><b>—</b>Observações e assinaturas</h2>${p.notes?`<h3>Observações do evento</h3><div class="notes">${esc(p.notes)}</div>`:''}${(p.days||[]).some(d=>d.label)?`<h3>Observações por dia</h3>`+tb(['Dia','Tipo','Observação'],p.days.filter(d=>d.label).map(d=>[parseYMD(d.date).toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}),d.type,d.label])):''}<h3>Anotações em campo</h3><div class="lines">${'<div></div>'.repeat(p.notes?4:7)}</div><div class="sign"><div>${esc(o.resp||'')}<span>Responsável técnico</span></div><div><span>Produção</span></div><div>${esc(p.client||'')}<span>Cliente</span></div></div><p class="note" style="margin-top:12mm">Gerado pela Central Técnica by Don em ${new Date().toLocaleString('pt-BR')}. Documento sujeito a alterações.</p></section>`;
   return s;
 }
@@ -1885,6 +1894,152 @@ R.audio=()=>{
 };
 
 
+/* =========================================================
+   V46 — modelos de evento, estoque do depósito, separação e retorno
+   ========================================================= */
+const WZ_BASE={sw:'ATEM 2 M/E Constellation HD',cam:'URSA Broadcast G2',ncam:4,ptz:'Panasonic AW-UE160',nptz:1,vmix:true,vh:true,isoRec:4,pgmRec:true,stream:true,ret:true,ref:true,mvmon:true,net:true,dist:50,mode:'replace'};
+const BUILTIN_MODELS=[
+ {id:'m-show',name:'Show ao vivo · 4 câmeras + PTZ',desc:'Constellation 2 M/E, 4 câmeras de ombro, 1 PTZ, Videohub com ISO, vMix de GC/VT, streaming e referência.',
+  wz:{},days:[[0,'Montagem','','Montagem e testes'],[1,'Ensaio','18:00','Ensaio geral'],[2,'Evento','20:00','Show'],[3,'Desmontagem','','']],
+  rd:[['Abertura','VT',60,'GC / VT'],['Bloco 1','Ao vivo',1800,'CAM 01'],['Intervalo','VT',300,'GC / VT'],['Bloco 2','Ao vivo',1800,'CAM 01'],['Encerramento','Ao vivo',120,'CAM 02']],
+  crew:[['Direção de TV','CH1 Direção'],['Diretor de imagens','CH1 Direção'],['Engenharia / shading','CH2 Técnica'],['Câmera 01','CH3 Câmeras'],['Câmera 02','CH3 Câmeras'],['Câmera 03','CH3 Câmeras'],['Câmera 04','CH3 Câmeras'],['Operador PTZ','CH3 Câmeras'],['GC / VT','CH1 Direção'],['Áudio','CH4 Áudio']]},
+ {id:'m-culto',name:'Culto / igreja · 3 câmeras',desc:'Television Studio HD8 ISO, 2 Studio Camera, 1 PTZ, vMix para letras e slides, gravação e streaming.',
+  wz:{sw:'ATEM Television Studio HD8 ISO',cam:'Studio Camera 4K Pro G2',ncam:2,ptz:'Panasonic AW-UE40',nptz:1,vh:false,isoRec:0,ref:false,dist:30},days:[[0,'Evento','19:00','Culto']],
+  rd:[['Abertura','VT',60,'GC / VT'],['Louvor','Ao vivo',1800,'CAM 01'],['Avisos','Ao vivo',300,'CAM 02'],['Pregação','Ao vivo',2400,'CAM 01'],['Encerramento','Ao vivo',300,'CAM 02']],
+  crew:[['Direção de imagens','CH1 Direção'],['Câmera 01','CH2 Câmeras'],['Câmera 02','CH2 Câmeras'],['Operador PTZ / letras','CH1 Direção'],['Áudio','CH3 Áudio']]},
+ {id:'m-pod',name:'Podcast / estúdio · 3 câmeras',desc:'Television Studio HD8 ISO com 3 Studio Camera, monitor de multiview e streaming. Gravação ISO no próprio switcher.',
+  wz:{sw:'ATEM Television Studio HD8 ISO',cam:'Studio Camera 4K Pro G2',ncam:3,nptz:0,vmix:false,vh:false,isoRec:0,pgmRec:false,ret:false,ref:false,dist:10},days:[[0,'Evento','14:00','Gravação']],
+  rd:[['Abertura','VT',30,'CAM 01'],['Bloco 1','Ao vivo',1500,'CAM 01'],['Bloco 2','Ao vivo',1500,'CAM 01'],['Encerramento','Ao vivo',120,'CAM 02']],
+  crew:[['Direção / corte','CH1 Direção'],['Áudio','CH1 Direção'],['Produção','CH2 Produção']]},
+ {id:'m-corp',name:'Corporativo / palestra · 2 câmeras + PTZ',desc:'Constellation 1 M/E, 2 câmeras, 1 PTZ, vMix para slides, 2 ISO, gravação e streaming.',
+  wz:{sw:'ATEM 1 M/E Constellation HD',ncam:2,ptz:'Panasonic AW-UE80',nptz:1,vh:false,isoRec:2,ref:false,dist:30},days:[[0,'Montagem','','Montagem e testes'],[1,'Evento','09:00','Evento']],
+  rd:[['Credenciamento','VT',1800,'GC / VT'],['Abertura','Ao vivo',600,'CAM 01'],['Palestra 1','Ao vivo',2700,'CAM 01'],['Coffee break','VT',1200,'GC / VT'],['Palestra 2','Ao vivo',2700,'CAM 01'],['Encerramento','Ao vivo',600,'CAM 02']],
+  crew:[['Direção de imagens','CH1 Direção'],['Câmera 01','CH2 Câmeras'],['Câmera 02','CH2 Câmeras'],['Slides / GC','CH1 Direção'],['Áudio','CH3 Áudio']]},
+ {id:'m-sport',name:'Esporte · 6 câmeras',desc:'Constellation 2 M/E, 6 câmeras com 100 m de cabo, Videohub com 6 ISO, vMix, retorno, referência e streaming.',
+  wz:{ncam:6,nptz:0,isoRec:6,dist:100},days:[[0,'Montagem','','Montagem e testes'],[1,'Evento','16:00','Jogo'],[2,'Desmontagem','','']],
+  rd:[['Pré-jogo','Ao vivo',900,'CAM 01'],['1º tempo','Ao vivo',2700,'CAM 01'],['Intervalo','VT',900,'GC / VT'],['2º tempo','Ao vivo',2700,'CAM 01'],['Pós-jogo','Ao vivo',600,'CAM 02']],
+  crew:[['Direção de TV','CH1 Direção'],['Diretor de imagens','CH1 Direção'],['Engenharia / shading','CH2 Técnica'],...[1,2,3,4,5,6].map(i=>['Câmera 0'+i,'CH3 Câmeras']),['Replay / GC','CH1 Direção'],['Áudio','CH4 Áudio']]}
+];
+const MODEL_PARTS=[['patch','Equipamentos, racks, patch e multiview'],['rundown','Espelho do programa'],['crew','Equipe (funções e canais)'],['check','Checklist técnico'],['audio','Áudio'],['space','Planta, house e passagem de cabos'],['notes','Observações']];
+function dayPatternOf(p){const ds=p.days||[];if(!ds.length)return [];const t0=parseYMD(ds[0].date);return ds.map(d=>[Math.round((parseYMD(d.date)-t0)/864e5),d.type,d.onair||'',d.label||''])}
+function daysFromPattern(pat,start){const t0=parseYMD(start);return pat.map(([off,type,onair,label])=>{const d=new Date(t0);d.setDate(t0.getDate()+off);return {id:uid(),date:ymd(d),type,onair:onair||'',label:label||''}})}
+function modelInfo(m){if(m.wz){const o={...WZ_BASE,...m.wz};return `${o.ncam+o.nptz} câmeras · ${m.days.length} dia(s) · ${m.rd.length} blocos`}const d=m.data;return `${d.gear.length} equip. · ${(d.racks||[]).length?d.racks.length+' rack(s) · ':''}${(m.pattern||[]).length||'—'} dia(s) · ${d.rundown.length} blocos`}
+function createFromModel(m,v){
+  let p;
+  if(m.wz){p=newProject(v.name);normalize(p);generatePatch(p,{...WZ_BASE,...m.wz});suggestAll(p);
+    p.days=v.start?daysFromPattern(m.days,v.start):[];const sd=p.days.filter(d=>d.type==='Evento'||d.type==='Ensaio');
+    (sd.length?sd:[null]).forEach(d=>m.rd.forEach(([title,type,dur,cam])=>p.rundown.push({id:uid(),title,type,dur,cam,notes:'',day:d?d.id:null})));
+    p.crew=m.crew.map(([role,ic])=>({id:uid(),name:'',role,ic,radio:'',phone:''}));
+  }else{
+    p=JSON.parse(JSON.stringify(m.data));p.id=uid();p.name=v.name;p.created=new Date().toISOString();p.snaps=[];p.sep={};(p.check||[]).forEach(c=>c.done=false);
+    p.days=v.start&&m.pattern?daysFromPattern(m.pattern,v.start):[];
+    p.rundown.forEach(b=>{b.id=uid();b.day=b.dayIdx!=null&&p.days[b.dayIdx]?p.days[b.dayIdx].id:null;delete b.dayIdx});
+  }
+  p.client=v.client||'';p.venue=v.venue||'';p.date='';
+  normalize(p);syncDate(p);S.projects.push(p);S.current=p.id;save();return p;
+}
+function saveAsModel(p,name,desc,parts){
+  const d=strip(p),blank=newProject('x');
+  if(!parts.patch){['gear','links','mv'].forEach(k=>d[k]=blank[k]);d.racks=[];d.vh={};d.extras=[];d.camsheets={}}
+  if(!parts.rundown)d.rundown=[];else d.rundown=d.rundown.map(b=>({...b,dayIdx:Math.max(0,(p.days||[]).findIndex(x=>x.id===b.day)),day:null}));
+  if(!parts.crew)d.crew=[];
+  if(!parts.check)d.check=blank.check;
+  if(!parts.audio)delete d.audio;
+  if(!parts.space){d.floor=blank.floor;d.house=blank.house;d.cables=blank.cables}
+  if(!parts.notes)d.notes='';
+  d.sep={};
+  const m={id:uid(),name,desc:desc||'',created:new Date().toISOString(),pattern:dayPatternOf(p),data:d};S.templates.push(m);save();return m;
+}
+function modelCreateModal(m){
+  const def=(()=>{const d=new Date();d.setDate(d.getDate()+7);return ymd(d)})();
+  ask(`Novo evento a partir de “${m.name}”`,[{k:'name',label:'Nome do evento',v:''},{k:'client',label:'Cliente',v:''},{k:'venue',label:'Local',v:''},{k:'start',label:'Primeiro dia',v:def,type:'date'}],v=>{if(!v.name){toast('Dê um nome ao evento.');return}const p=createFromModel(m,v);render();go('dash');toast(`${p.name} criado com ${p.gear.length} equipamento(s) e ${p.days.length} dia(s)`)},'Criar evento');
+}
+R.models=()=>{
+  const p=cur();S.templates=S.templates||[];
+  $('#view').innerHTML=`<div class="vhead"><div><h1>Modelos de evento</h1><p>Comece um evento novo já com equipamentos, patch, racks, espelho, equipe e cronograma. Use um modelo pronto ou salve um evento seu como modelo para repetir.</p></div>
+  <div class="acts"><button class="btn go" id="mdSave">Salvar “${esc(p.name)}” como modelo</button></div></div>
+  <h3 style="margin:4px 0 10px">Seus modelos</h3>
+  ${S.templates.length?`<div class="crew" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr));margin-bottom:22px">${S.templates.map(t=>`<div class="cc"><div class="nm">${esc(t.name)}</div><p class="note" style="margin:2px 0 6px">${esc(modelInfo(t))}</p>${t.desc?`<p style="font-size:13px;color:var(--soft);margin:0 0 8px">${esc(t.desc)}</p>`:''}${(t.pattern||[]).length?`<div class="row" style="gap:4px;margin-bottom:10px;flex-wrap:wrap">${t.pattern.map(([off,type,on])=>`<span class="pill" style="font-size:11px;border-color:${DAYC[type]};color:${DAYC[type]}">D${off+1} ${esc(type)}${on?' '+on:''}</span>`).join('')}</div>`:''}
+    <div class="row"><button class="btn go sm" data-mu="${t.id}">Criar evento</button><button class="btn sm" data-mr="${t.id}">Renomear</button><button class="btn sm ghost" data-mup="${t.id}" title="Substitui o conteúdo do modelo pelo projeto aberto">Atualizar com o projeto aberto</button><button class="btn sm danger" data-md="${t.id}">✕</button></div></div>`).join('')}</div>`
+  :`<div class="empty" style="margin-bottom:22px"><b>Nenhum modelo seu ainda</b>Monte um evento do jeito que vocês trabalham e clique em “Salvar como modelo”.</div>`}
+  <h3 style="margin:4px 0 10px">Modelos prontos</h3><p class="note" style="margin:-4px 0 12px">Geram o patch completo com o Gerador, metragens sugeridas, espelho por dia e funções da equipe. Depois é só ajustar.</p>
+  <div class="crew" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr))">${BUILTIN_MODELS.map(m=>`<div class="cc"><div class="nm">${esc(m.name)}</div><p class="note" style="margin:2px 0 6px">${esc(modelInfo(m))}</p><p style="font-size:13px;color:var(--soft);margin:0 0 8px">${esc(m.desc)}</p><div class="row" style="gap:4px;margin-bottom:10px;flex-wrap:wrap">${m.days.map(([off,type,on])=>`<span class="pill" style="font-size:11px;border-color:${DAYC[type]};color:${DAYC[type]}">D${off+1} ${esc(type)}${on?' '+on:''}</span>`).join('')}</div><button class="btn go sm" data-mb="${m.id}">Criar evento</button></div>`).join('')}</div>`;
+  $$('[data-mb]').forEach(b=>b.onclick=()=>modelCreateModal(BUILTIN_MODELS.find(m=>m.id===b.dataset.mb)));
+  const T=id=>S.templates.find(t=>t.id===id);
+  $$('[data-mu]').forEach(b=>b.onclick=()=>modelCreateModal(T(b.dataset.mu)));
+  $$('[data-mr]').forEach(b=>b.onclick=()=>{const t=T(b.dataset.mr);ask('Renomear modelo',[{k:'name',label:'Nome',v:t.name},{k:'desc',label:'Descrição',v:t.desc||''}],v=>{t.name=v.name||t.name;t.desc=v.desc;save();R.models()},'Salvar')});
+  $$('[data-mup]').forEach(b=>b.onclick=()=>{const t=T(b.dataset.mup);confirmBox(`Substituir o conteúdo de “${t.name}” pelo projeto “${p.name}”?`,'Atualizar modelo',()=>{const n=saveAsModel(p,t.name,t.desc,Object.fromEntries(MODEL_PARTS.map(([k])=>[k,true])));S.templates=S.templates.filter(x=>x!==n);t.data=n.data;t.pattern=n.pattern;save();R.models();toast('Modelo atualizado')})});
+  $$('[data-md]').forEach(b=>b.onclick=()=>{const t=T(b.dataset.md);confirmBox(`Excluir o modelo “${t.name}”? Os eventos criados com ele não mudam.`,'Excluir',()=>{S.templates=S.templates.filter(x=>x!==t);save();R.models()})});
+  $('#mdSave').onclick=()=>{
+    $('#modal').innerHTML=`<h3>Salvar como modelo</h3><label class="f"><span>Nome do modelo</span><input class="in" id="msN" value="${esc(p.name)}"></label><label class="f"><span>Descrição (opcional)</span><input class="in" id="msD" placeholder="Ex.: padrão para shows no ginásio"></label>
+    <p class="sub" style="margin:4px 0 8px">O que entra no modelo</p>${MODEL_PARTS.map(([k,l])=>`<label class="row" style="gap:8px;font-size:13px;padding:3px 0"><input type="checkbox" data-mp="${k}" ${k==='notes'?'':'checked'}> ${l}</label>`).join('')}
+    <p class="note">O cronograma vira um padrão de dias (D1 montagem, D2 evento…) e ganha datas novas quando você criar um evento. Nomes da equipe ficam; apague no evento novo se mudarem.</p>
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost" id="msC">Cancelar</button><button class="btn go" id="msOk">Salvar modelo</button></div>`;
+    $('#modalBg').classList.add('open');const close=()=>$('#modalBg').classList.remove('open');$('#msC').onclick=close;
+    $('#msOk').onclick=()=>{const parts=Object.fromEntries($$('#modal [data-mp]').map(i=>[i.dataset.mp,i.checked]));saveAsModel(p,$('#msN').value.trim()||p.name,$('#msD').value.trim(),parts);close();R.models();toast('Modelo salvo')}};
+};
+
+/* ---------- estoque do depósito ---------- */
+const CAB_TYPES=['SDI','Fibra','HDMI','Rede','Áudio','REF'];
+function inv(){S.inv=S.inv||{gear:{},cab:{}};S.inv.gear=S.inv.gear||{};S.inv.cab=S.inv.cab||{};return S.inv}
+function needGear(p){const n={};p.gear.forEach(g=>{n[g.model]=(n[g.model]||0)+1});return n}
+function needCab(p){const sp=1+(p.orderSpare??10)/100;const raw={};p.links.forEach(l=>{if(l.type==='RF')return;const m=parseFloat(String(l.len).replace(',','.'));const k=l.type+'|'+(m>0?roundLen(l.type,m):'?');raw[k]=(raw[k]||0)+1});const out={};Object.entries(raw).forEach(([k,n])=>out[k]=Math.ceil(n*sp));return out}
+const invHas=()=>{const I=inv();return Object.values(I.gear).some(v=>v>0)||Object.values(I.cab).some(v=>v>0)};
+function stockCell(need,have,show){if(!show)return '<span style="color:var(--mute)">—</span>';const f=need-have;return f>0?`<b style="color:var(--tally)">falta ${f}</b> <span style="color:var(--mute)">(tem ${have})</span>`:`<span style="color:var(--phos)">ok</span> <span style="color:var(--mute)">(tem ${have})</span>`}
+let invQ='';
+R.inv=()=>{
+  const p=cur(),I=inv(),ng=needGear(p),nc=needCab(p);
+  const models=[...new Set([...Object.keys(I.gear),...Object.keys(ng)])].sort((a,b)=>(catOf(a)+a).localeCompare(catOf(b)+b));
+  const falta=models.filter(m=>(ng[m]||0)>(I.gear[m]||0)).length+Object.entries(nc).filter(([k,n])=>!k.endsWith('|?')&&n>(I.cab[k]||0)).length;
+  const allModels=Object.values(CATALOG).flat();
+  $('#view').innerHTML=`<div class="vhead"><div><h1>Estoque do depósito</h1><p>Quanto vocês têm de cada equipamento e cabo. Vale para todos os projetos: a lista de pedido e a separação comparam com o que o evento aberto precisa e mostram o que falta alugar.</p></div>
+  <div class="acts"><button class="btn" id="ivAll">Puxar modelos de todos os projetos</button><button class="btn" id="ivCsv">Exportar CSV</button></div></div>
+  <div class="grid g3" style="margin-bottom:16px"><div class="kpi"><span>Modelos no estoque</span><b>${Object.values(I.gear).filter(v=>v>0).length}</b></div><div class="kpi"><span>Cabos no estoque</span><b>${Object.values(I.cab).reduce((a,v)=>a+(+v||0),0)}</b></div><div class="kpi"><span>Faltas para “${esc(p.name)}”</span><b style="color:${falta?'var(--tally)':'var(--phos)'}">${falta}</b></div></div>
+  <div class="grid g2"><div class="panel" style="padding:6px"><div style="padding:10px 10px 6px"><h3>Equipamentos</h3>
+    <div class="row" style="margin-top:8px"><input class="in" id="ivQ" list="ivModels" placeholder="Adicionar modelo do catálogo…" value="${esc(invQ)}" style="flex:1"><datalist id="ivModels">${allModels.map(m=>`<option value="${esc(m)}">`).join('')}</datalist><button class="btn" id="ivAdd">Adicionar</button></div></div>
+    <table class="t"><thead><tr><th>Modelo</th><th style="width:90px">No estoque</th><th>Este projeto</th></tr></thead><tbody>${models.map(m=>`<tr><td>${esc(m)}<div style="font-size:11px;color:var(--mute)">${esc(catOf(m))}</div></td><td><input class="in num" type="number" min="0" data-ig="${esc(m)}" value="${I.gear[m]??''}" placeholder="0" style="text-align:center"></td><td class="num" style="font-size:12.5px">${ng[m]?`precisa ${ng[m]} · `+stockCell(ng[m],I.gear[m]||0,true):'<span style="color:var(--mute)">não usa</span>'}</td></tr>`).join('')||'<tr><td colspan="3" class="note">Nenhum modelo. Adicione pelo campo acima.</td></tr>'}</tbody></table></div>
+   <div class="panel"><h3>Cabos por comprimento</h3><p class="sub">Quantos lances de cada medida vocês têm. A necessidade do projeto já inclui a reserva de ${p.orderSpare??10}% da lista de pedido.</p>
+    ${CAB_TYPES.map(t=>`<div style="margin-top:14px"><b style="font-size:13px"><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${SIG[t]};margin-right:6px"></i>${t}</b><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${STD_LEN[t].map(L=>{const k=t+'|'+L,need=nc[k]||0,have=+I.cab[k]||0,bad=need>have;return `<label title="${need?`Projeto precisa de ${need}`:''}" style="display:grid;gap:2px;text-align:center;font-size:11px;color:${bad?'var(--tally)':need?'var(--phos)':'var(--mute)'}">${String(L).replace('.',',')} m<input class="in num" type="number" min="0" data-ic="${k}" value="${I.cab[k]??''}" placeholder="0" style="width:58px;text-align:center;padding:5px;${bad?'border-color:var(--tally)':''}">${need?`<span>usa ${need}</span>`:'<span>&nbsp;</span>'}</label>`}).join('')}</div>${nc[t+'|?']?`<p class="note" style="color:var(--amber)">${nc[t+'|?']} cabo(s) ${t} sem metragem no projeto — use “Sugerir metragens” na lista de pedido.</p>`:''}</div>`).join('')}</div></div>`;
+  $$('[data-ig]').forEach(i=>i.onchange=()=>{const v=parseInt(i.value);if(v>0)I.gear[i.dataset.ig]=v;else I.gear[i.dataset.ig]=0;save();R.inv()});
+  $$('[data-ic]').forEach(i=>i.onchange=()=>{const v=parseInt(i.value);if(v>0)I.cab[i.dataset.ic]=v;else delete I.cab[i.dataset.ic];save();R.inv()});
+  const add=()=>{const m=$('#ivQ').value.trim();if(!allModels.includes(m)){toast('Escolha um modelo da lista do catálogo.');return}if(I.gear[m]==null)I.gear[m]=0;invQ='';save();R.inv();setTimeout(()=>{const el=$(`[data-ig="${CSS.escape(m)}"]`);el&&el.focus()},0)};
+  $('#ivAdd').onclick=add;$('#ivQ').onkeydown=e=>{if(e.key==='Enter')add()};$('#ivQ').oninput=e=>invQ=e.target.value;
+  $('#ivAll').onclick=()=>{let n=0;S.projects.forEach(x=>x.gear.forEach(g=>{if(I.gear[g.model]==null){I.gear[g.model]=0;n++}}));save();R.inv();toast(n?`${n} modelo(s) adicionados com quantidade 0. Preencha o que vocês têm.`:'Todos os modelos usados já estão na lista.')};
+  $('#ivCsv').onclick=()=>download('estoque-deposito.csv',csv([['Tipo','Item','Comprimento','Quantidade'],...Object.entries(I.gear).map(([m,q])=>['Equipamento',m,'',q]),...Object.entries(I.cab).map(([k,q])=>{const [t,L]=k.split('|');return ['Cabo',t,L+' m',q]})]),'text/csv');
+};
+
+/* ---------- separação e retorno ---------- */
+function sepItems(p){
+  const items=[];const sp=1+(p.orderSpare??10)/100;const I=inv(),ng=needGear(p);
+  (p.racks||[]).forEach(r=>{const gs=p.gear.filter(g=>g.rack===r.id);if(!gs.length)return;items.push({key:'rk:'+r.id,group:'Racks',label:`▣ ${r.name}`,sub:`${r.u}U · `+gs.map(g=>g.name).join(', '),qty:1})});
+  const solo={};p.gear.filter(g=>!g.rack||!(p.racks||[]).some(r=>r.id===g.rack)).forEach(g=>{(solo[g.model]=solo[g.model]||[]).push(g)});
+  Object.entries(solo).sort((a,b)=>(a[1][0].cat+a[0]).localeCompare(b[1][0].cat+b[0])).forEach(([m,gs])=>items.push({key:'g:'+m,group:gs[0].cat,label:m,sub:gs.map(g=>g.name).join(', '),qty:gs.length,stock:{need:ng[m],have:I.gear[m]||0}}));
+  const nc=needCab(p);Object.entries(nc).sort().forEach(([k,n])=>{const [t,L]=k.split('|');items.push({key:'c:'+k,group:'Cabos',label:L==='?'?`Cabo ${t} · sem metragem`:`Cabo ${t} · ${L.replace('.',',')} m`,sub:`inclui ${p.orderSpare??10}% de reserva`,qty:n,stock:L==='?'?null:{need:n,have:+I.cab[k]||0}})});
+  const d=orderData(p);Object.entries(d.conv).forEach(([k,n])=>items.push({key:'v:'+k,group:'Conversores',label:k,qty:n,stock:{need:n,have:I.gear[k]||0}}));
+  (p.extras||[]).filter(e=>e.qty>0&&!/^Rack \d+U \(case\)$/.test(e.name)).forEach(e=>items.push({key:'x:'+e.name,group:'Acessórios',label:e.name,qty:e.qty}));
+  return items;
+}
+function sepStats(p){const it=sepItems(p),s=p.sep||{};return {n:it.length,out:it.filter(i=>s[i.key]&&s[i.key].out).length,ret:it.filter(i=>s[i.key]&&s[i.key].ret).length,items:it}}
+let sepF='all';
+R.sep=()=>{
+  const p=cur();p.sep=p.sep||{};const st=sepStats(p),S2=p.sep,show=invHas();
+  const list=st.items.filter(i=>sepF==='all'||(sepF==='out'&&!(S2[i.key]||{}).out)||(sepF==='ret'&&(S2[i.key]||{}).out&&!(S2[i.key]||{}).ret)||(sepF==='falta'&&i.stock&&i.stock.need>i.stock.have));
+  const groups=[...new Set(list.map(i=>i.group))];const pc=(a,b)=>b?Math.round(a/b*100):0;
+  const faltas=st.items.filter(i=>i.stock&&i.stock.need>i.stock.have).length;
+  $('#view').innerHTML=`<div class="vhead"><div><h1>Separação e retorno</h1><p>Checklist dos equipamentos do evento: marque o que foi separado no depósito e, na volta, o que retornou. Racks contam como um volume só.</p></div>
+  <div class="acts"><button class="btn" id="spPrint">Imprimir lista</button><button class="btn" id="spReset">Limpar marcações</button></div></div>
+  <div class="grid g3" style="margin-bottom:14px"><div class="kpi"><span>Separado</span><b>${st.out}/${st.n}</b><div class="bar" style="margin-top:8px"><i style="width:${pc(st.out,st.n)}%;background:var(--phos)"></i></div></div><div class="kpi"><span>Retornou</span><b>${st.ret}/${st.n}</b><div class="bar" style="margin-top:8px"><i style="width:${pc(st.ret,st.n)}%;background:var(--cyan)"></i></div></div><div class="kpi"><span>Faltas no estoque</span><b style="color:${faltas?'var(--tally)':'var(--text)'}">${show?faltas:'—'}</b><small style="color:var(--mute);font-size:12px">${show?'comparado ao Estoque do depósito':'cadastre o estoque para comparar'}</small></div></div>
+  <div class="seg" id="spF" style="margin-bottom:12px">${[['all','Tudo'],['out','Falta separar'],['ret','Falta voltar'],['falta','Falta no estoque']].map(([k,l])=>`<button data-f="${k}" class="${sepF===k?'on':''}">${l}</button>`).join('')}</div>
+  ${list.length?`<table class="t sep"><thead><tr><th>Item</th><th class="num">Qtd</th>${show?'<th>Estoque</th>':''}<th style="text-align:center">Separado</th><th style="text-align:center">Retornou</th><th>Observação</th></tr></thead><tbody>${groups.map(g=>`<tr class="rackhead"><td colspan="${show?6:5}">${esc(g)}</td></tr>`+list.filter(i=>i.group===g).map(i=>{const s=S2[i.key]||{};return `<tr data-k="${esc(i.key)}" class="${s.ret?'done':''}"><td><b>${esc(i.label)}</b>${i.sub?`<div style="font-size:11.5px;color:var(--mute)">${esc(i.sub)}</div>`:''}</td><td class="num">${i.qty}</td>${show?`<td style="font-size:12px">${i.stock?stockCell(i.stock.need,i.stock.have,true):'<span style="color:var(--mute)">—</span>'}</td>`:''}<td style="text-align:center"><input type="checkbox" data-s="out" ${s.out?'checked':''} style="width:18px;height:18px"></td><td style="text-align:center"><input type="checkbox" data-s="ret" ${s.ret?'checked':''} ${s.out?'':'disabled'} style="width:18px;height:18px"></td><td><input class="in" data-s="note" value="${esc(s.note||'')}" placeholder="Ex.: case 3, defeito…" style="padding:5px 8px;font-size:12.5px"></td></tr>`}).join('')).join('')}</tbody></table>`
+  :`<div class="empty"><b>${st.n?'Nada neste filtro':'Nenhum item para separar'}</b>${st.n?'Troque o filtro acima.':'Adicione equipamentos, racks ou ligações ao projeto.'}</div>`}`;
+  $$('#spF button').forEach(b=>b.onclick=()=>{sepF=b.dataset.f;R.sep()});
+  $$('.sep tr[data-k]').forEach(tr=>{const k=tr.dataset.k;tr.querySelectorAll('[data-s]').forEach(i=>i.onchange=()=>{const s=S2[k]=S2[k]||{};const f=i.dataset.s;if(f==='note')s.note=i.value;else{s[f]=i.checked;if(f==='out'&&!i.checked)s.ret=false;s[f+'At']=i.checked?new Date().toISOString():undefined}save();if(f!=='note')R.sep()})});
+  $('#spReset').onclick=()=>confirmBox('Apagar todas as marcações de separação e retorno deste evento?','Limpar',()=>{p.sep={};save();R.sep()});
+  $('#spPrint').onclick=()=>{rpOpts=rpOpts||{on:new Set(RP_SECTIONS.map(s=>s[0])),cover:true,sign:true,rev:'1',resp:'',dark:false};rpOpts.on=new Set(['sep']);rpOpts.cover=false;rpOpts.sign=false;go('report');toast('Só a lista de separação está marcada. Marque as outras seções se quiser o caderno completo.')};
+};
+function sepReportHTML(p,tb,H){const st=sepStats(p),s=p.sep||{},show=invHas();const groups=[...new Set(st.items.map(i=>i.group))];const nc=show?6:5;
+  return `<p class="note">Separado ${st.out}/${st.n} · retornou ${st.ret}/${st.n}. Marque à mão na saída e na volta.</p><table class="septb"><colgroup><col><col style="width:12mm">${show?'<col style="width:22mm">':''}<col style="width:14mm"><col style="width:16mm"><col style="width:42mm"></colgroup><thead><tr><th>Item</th><th class="num r">Qtd</th>${show?'<th>Estoque</th>':''}<th class="c">Saída</th><th class="c">Retorno</th><th>Observação</th></tr></thead><tbody>${groups.map(g=>`<tr class="grp"><td colspan="${nc}">${esc(g)}</td></tr>`+st.items.filter(i=>i.group===g).map(i=>{const x=s[i.key]||{};return `<tr><td><b>${esc(i.label)}</b>${i.sub?`<br><span class="muted" style="font-size:7.5pt">${esc(i.sub)}</span>`:''}</td><td class="num r">${i.qty}</td>${show?`<td>${i.stock?(i.stock.need>i.stock.have?`<b>falta ${i.stock.need-i.stock.have}</b>`:'ok'):'—'}</td>`:''}<td class="c"><span class="box">${x.out?'✓':''}</span></td><td class="c"><span class="box">${x.ret?'✓':''}</span></td><td>${esc(x.note||'')}</td></tr>`}).join('')).join('')}</tbody></table>`}
+
 /* ---------- sugestão de metragem ---------- */
 const STD_LEN={SDI:[0.5,1,2,3,5,10,15,20,25,30,40,50,75,100],Fibra:[25,50,100,150,200,300,500],HDMI:[0.5,1,2,3,5,10,15],Rede:[0.5,1,2,3,5,10,15,20,30,50,75,100],'Áudio':[1,2,3,5,10,15,20,30,50,100],REF:[1,2,3,5,10,15,20,30,50,100]};
 const FIELD_CATS=['Câmeras','Sony Cinema Line / FX','PTZ Panasonic / Sony'];
@@ -1917,10 +2072,11 @@ R.order=()=>{
   const cab={};p.links.forEach(l=>{if(l.type==='RF')return;const c=cab[l.type]=cab[l.type]||{n:0,m:0,semM:0,sug:0,list:{}};c.n++;if(l.sug&&parseFloat(l.len)>0)c.sug++;const m=parseFloat(String(l.len).replace(',','.'));if(m>0){c.m+=m;const k=String(m);c.list[k]=(c.list[k]||0)+1}else c.semM++});
   const rotas={};p.cables.routes.forEach(r=>{const m=r.len?+r.len:routeLen(r,p.floor.scale).m;const x=rotas[r.type]=rotas[r.type]||{n:0,m:0};x.n++;x.m+=m||0});
   const conv={};linkIssues(p).filter(i=>i.kind==='conv').forEach(i=>{const k=i.from==='HDMI'&&i.to==='SDI'?'Micro Converter HDMI to SDI 12G':i.from==='SDI'&&i.to==='HDMI'?'Micro Converter SDI to HDMI 12G':`Conversor ${i.from} → ${i.to}`;conv[k]=(conv[k]||0)+1});
+  const ivOn=invHas(),IV=inv(),NG=needGear(p);
   const rowsCab=Object.entries(cab).flatMap(([t,c])=>[[`Cabo ${t}`,`${c.n} lance(s)`,Math.ceil(c.n*sp)+' un',c.m?fmt(c.m*sp,0)+' m':'—',c.semM?`${c.semM} sem metragem`:c.sug?`${c.sug} sugerida(s)`:'']]);
   $('#view').innerHTML=`<div class="vhead"><div><h1>Lista de pedido</h1><p>O que separar no depósito, somado a partir dos equipamentos, do patch e das rotas de cabo. Informe o comprimento de cada cabo no Patch, ou use “Sugerir metragens” para preencher os que faltam com medidas comerciais.</p></div>
   <div class="acts"><button class="btn" id="odSug" title="Preenche os cabos sem metragem com um comprimento padrão sugerido">Sugerir metragens</button><label class="row" style="gap:6px;font-size:12.5px;color:var(--soft)">Reserva <input class="in num" type="number" id="odSp" value="${p.orderSpare}" style="width:70px">%</label><button class="btn go" id="odCsv">Exportar CSV</button></div></div>
-  <div class="grid g2"><div class="panel" style="padding:6px"><div style="padding:10px 10px 0"><h3>Equipamentos</h3></div><table class="t"><thead><tr><th>Modelo</th><th>Categoria</th><th>Qtd</th></tr></thead><tbody>${Object.entries(byModel).sort((a,b)=>a[1].cat.localeCompare(b[1].cat)).map(([m,x])=>`<tr><td>${esc(m)}</td><td style="color:var(--soft);font-size:12.5px">${esc(x.cat)}</td><td class="num">${x.n}${x.res?` <span style="color:var(--cyan)">(${x.res} reserva)</span>`:''}</td></tr>`).join('')}</tbody></table></div>
+  <div class="grid g2"><div class="panel" style="padding:6px"><div style="padding:10px 10px 0"><h3>Equipamentos</h3></div><table class="t"><thead><tr><th>Modelo</th><th>Categoria</th><th>Qtd</th>${ivOn?'<th>Estoque</th>':''}</tr></thead><tbody>${Object.entries(byModel).sort((a,b)=>a[1].cat.localeCompare(b[1].cat)).map(([m,x])=>`<tr><td>${esc(m)}</td><td style="color:var(--soft);font-size:12.5px">${esc(x.cat)}</td><td class="num">${x.n}${x.res?` <span style="color:var(--cyan)">(${x.res} reserva)</span>`:''}</td>${ivOn?`<td style="font-size:12px">${stockCell(x.n,IV.gear[m]||0,true)}</td>`:''}</tr>`).join('')}</tbody></table>${ivOn?'':'<p class="note" style="padding:4px 10px 10px">Cadastre o <a href="#inv" style="color:var(--phos)">Estoque do depósito</a> para ver o que falta alugar.</p>'}</div>
   <div class="grid"><div class="panel" style="padding:6px"><div style="padding:10px 10px 0"><h3>Cabos do patch</h3><p class="sub">Com ${p.orderSpare}% de reserva.</p></div>${rowsCab.length?`<table class="t"><thead><tr><th>Item</th><th>No patch</th><th>Separar</th><th>Metragem</th><th></th></tr></thead><tbody>${rowsCab.map(r=>`<tr>${r.map((c,i)=>`<td class="${i?'num':''}" style="${i===4?'color:var(--amber);font-size:12px':''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<p class="note" style="padding:0 10px">Sem ligações no patch.</p>'}
    ${Object.entries(cab).some(([t,c])=>Object.keys(c.list).length)?`<div style="padding:4px 10px 10px;font-size:12.5px;color:var(--soft)">${Object.entries(cab).map(([t,c])=>Object.keys(c.list).length?`<b style="color:var(--text)">${t}:</b> `+Object.entries(c.list).sort((x,y)=>x[0]-y[0]).map(([m,n])=>`${n}× ${String(m).replace('.',',')} m`).join(' · '):'').filter(Boolean).join('<br>')}</div>`:''}</div>
    <div class="panel" style="padding:6px"><div style="padding:10px 10px 0"><h3>Rotas físicas</h3></div>${Object.keys(rotas).length?`<table class="t"><tbody>${Object.entries(rotas).map(([t,x])=>`<tr><td>${esc(t)}</td><td class="num">${x.n} rota(s)</td><td class="num">${x.m?fmt(x.m*1.1*sp,0)+' m':'sem metragem'}</td></tr>`).join('')}</tbody></table>`:'<p class="note" style="padding:0 10px 10px">Nenhuma rota desenhada.</p>'}</div>
