@@ -2140,7 +2140,7 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('resize',()=>{if(view==='patch')applyPV()});
 
 function deskPDF(body,name){const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><link rel="stylesheet" href="fonts/fonts.css"><style>body{margin:0;background:#fff}</style></head><body>${body}</body></html>`;toast('Gerando PDF…');DESK.savePDF(html,name).then(f=>{if(f)toast('PDF salvo e aberto')}).catch(()=>toast('Não foi possível gerar o PDF.'))}
-if(DESK){DESK.onMenu(cmd=>{if(cmd.startsWith('go:'))return go(cmd.slice(3));
+if(DESK){DESK.onMenu(cmd=>{if(cmd==='flush'){clearTimeout(saveT);try{DESK.saveState(JSON.stringify(S))}catch(e){}return}if(cmd.startsWith('go:'))return go(cmd.slice(3));
   if(cmd==='palette')return openPal();if(cmd==='onair')return $('#onair').click();if(cmd==='newproj')return $('#newProj').click();
   if(cmd==='backup-save')return download(`central-tecnica-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(S),'application/json');
   if(cmd==='backup-open'){go('backup');setTimeout(()=>$('#bImp')&&$('#bImp').click(),50)}});}
