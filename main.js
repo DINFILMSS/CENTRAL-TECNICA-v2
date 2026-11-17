@@ -154,7 +154,7 @@ function buildMenu() {
       { label: 'Folhas de câmera', click: () => send('go:camsheets') },
       ...(isMac ? [] : [{ type: 'separator' }, { role: 'quit', label: 'Sair' }])
     ] },
-    { label: 'Editar', submenu: [{ role: 'undo', label: 'Desfazer' }, { role: 'redo', label: 'Refazer' }, { type: 'separator' }, { role: 'cut', label: 'Recortar' }, { role: 'copy', label: 'Copiar' }, { role: 'paste', label: 'Colar' }, { role: 'selectAll', label: 'Selecionar tudo' }] },
+    { label: 'Editar', submenu: [{ label: 'Desfazer', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') }, { label: 'Refazer', accelerator: 'CmdOrCtrl+Shift+Z', click: () => send('redo') }, ...(process.platform === 'darwin' ? [] : [{ label: 'Refazer', accelerator: 'Ctrl+Y', click: () => send('redo'), visible: false }]), { type: 'separator' }, { role: 'cut', label: 'Recortar' }, { role: 'copy', label: 'Copiar' }, { role: 'paste', label: 'Colar' }, { role: 'selectAll', label: 'Selecionar tudo' }] },
     { label: 'Exibir', submenu: [
       { label: 'Busca rápida', accelerator: 'CmdOrCtrl+K', click: () => send('palette') },
       { label: 'Painel do evento', accelerator: 'CmdOrCtrl+1', click: () => send('go:dash') },
@@ -167,7 +167,7 @@ function buildMenu() {
       { type: 'separator' }, { role: 'togglefullscreen', label: 'Tela cheia' }
     ] },
     { label: 'Janela', submenu: [{ role: 'minimize', label: 'Minimizar' }, { role: 'close', label: 'Fechar' }] },
-    { label: 'Ajuda', submenu: [{ label: `Versão ${app.getVersion()}`, enabled: false }, { label: 'Procurar atualizações…', click: () => checkUpdatesNow() }, { label: 'Página de downloads', click: () => { const u = releasesURL(); if (u) shell.openExternal(u); } }, { type: 'separator' }, { label: 'Mostrar ferramentas de diagnóstico', accelerator: 'CmdOrCtrl+Alt+I', click: () => win && win.webContents.toggleDevTools() }] }
+    { label: 'Ajuda', submenu: [{ label: `Versão ${app.getVersion()}`, enabled: false }, { label: 'Tour rápido pelas telas', click: () => send('tour') }, { label: 'Procurar atualizações…', click: () => checkUpdatesNow() }, { label: 'Página de downloads', click: () => { const u = releasesURL(); if (u) shell.openExternal(u); } }, { type: 'separator' }, { label: 'Mostrar ferramentas de diagnóstico', accelerator: 'CmdOrCtrl+Alt+I', click: () => win && win.webContents.toggleDevTools() }] }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(tpl));
 }
