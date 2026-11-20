@@ -1318,8 +1318,9 @@ R.report=()=>{
   </div>`;
   const upd=()=>{$('.doc-preview .doc').innerHTML=buildReport(p)};
   const lhRe=()=>{$('#lhBox').innerHTML=lhPanelHTML();lhBind(lhRe);upd()};lhBind(lhRe);
+  if(S.brand&&S.brand.first&&!S.brand.dk)ensureDarkLH().then(ok=>{if(ok&&rpOpts.dark)upd()});
   $$('[data-rp]').forEach(i=>i.onchange=()=>{i.checked?rpOpts.on.add(i.dataset.rp):rpOpts.on.delete(i.dataset.rp);upd()});
-  $$('#rpMode button').forEach(b=>b.onclick=()=>{rpOpts.dark=b.dataset.m==='dark';$$('#rpMode button').forEach(x=>x.classList.toggle('on',x===b));upd();toast(rpOpts.dark?'PDF escuro: ideal para ler na tela, tablet ou celular'+(lhOn()?'. O papel timbrado só vale no modo Impressão.':''):'PDF de impressão')});
+  $$('#rpMode button').forEach(b=>b.onclick=()=>{rpOpts.dark=b.dataset.m==='dark';$$('#rpMode button').forEach(x=>x.classList.toggle('on',x===b));upd();toast(rpOpts.dark?'PDF escuro: ideal para ler na tela, tablet ou celular'+(lhOn()?', com o papel timbrado em versão escura':''):'PDF de impressão')});
   $('#rpCover').onchange=e=>{rpOpts.cover=e.target.checked;upd()};
   $('#rpSign').onchange=e=>{rpOpts.sign=e.target.checked;upd()};
   $('#rpResp').oninput=e=>{rpOpts.resp=e.target.value;upd()};
@@ -1447,7 +1448,7 @@ function buildReport(p){
   if(secs.some(x=>x[0]==='cases')&&(p.cases||[]).some(c=>c.items.length))s+=sec('cases','Cases e itens',casesReportHTML(p),brk());
   if(secs.some(x=>x[0]==='sep')&&sepItems(p).length)s+=sec('sep','Separação de equipamentos',sepReportHTML(p,tb,H),brk());
   if(o.sign)s+=`<section class="pb"><h2 class="sec"><b>—</b>Observações e assinaturas</h2>${p.notes?`<h3>Observações do evento</h3><div class="notes">${esc(p.notes)}</div>`:''}${(p.days||[]).some(d=>d.label)?`<h3>Observações por dia</h3>`+tb(['Dia','Tipo','Observação'],p.days.filter(d=>d.label).map(d=>[parseYMD(d.date).toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}),d.type,d.label])):''}<h3>Anotações em campo</h3><div class="lines">${'<div></div>'.repeat(p.notes?4:7)}</div><div class="sign" ${p.td?'style="grid-template-columns:repeat(4,1fr);gap:7mm"':''}>${p.td?`<div>${esc(p.td)}<span>Diretor técnico</span></div>`:''}<div>${esc(o.resp||'')}<span>Responsável técnico</span></div><div><span>Produção</span></div><div>${esc(p.client||'')}<span>Cliente</span></div></div><p class="note" style="margin-top:12mm">Gerado pela Central Técnica by Don em ${new Date().toLocaleString('pt-BR')}. Documento sujeito a alterações.</p></section>`;
-  {const B=lhOn();if(o.dark)s=darkWrap(s);else if(B)s=lhWrap(B,s)}
+  {const B=lhOn();if(o.dark&&B&&B.dk)s=lhWrap({...B,first:B.dk.first,other:B.dk.other},darkWrap(s,false));else if(o.dark)s=darkWrap(s);else if(B)s=lhWrap(B,s)}
   return s;
 }
 
@@ -2126,13 +2127,14 @@ async function accentOf(url){try{const img=await new Promise((r,j)=>{const i=new
 
 
 /* ---------- PDF em modo escuro ---------- */
-function darkWrap(inner){
+function darkWrap(inner,page=true){
   return `<style>.doc:has(.dk-wrap){--ink:#e6f0ea;--soft:#93a89c;--rule:#26362e;--acc:#2eff7e;background:#0b100d;color:var(--ink)}
 .dk-wrap th{background:#16211b;border-bottom-color:#3a4f44;color:#cfe0d6}
 .dk-wrap td{border-bottom-color:var(--rule)}
 .dk-wrap .fig{border-color:#2b3d33;background:#0b100d}
 .dk-wrap .fig-patch svg{filter:invert(.92) hue-rotate(180deg) saturate(1.3)}
 .dk-wrap .cover .band{background:#000;border:1pt solid #1f2c25}
+.lh-wrap .dk-wrap .cover .band{background:transparent;border:0;border-bottom:1.5pt solid var(--ink)}
 .dk-wrap .cover h1{color:#fff}
 .dk-wrap .disc{border-color:#3a4f44;background:#101712}
 .dk-wrap .notes{background:#121a15}
@@ -2145,14 +2147,25 @@ function darkWrap(inner){
 .dk-wrap .sign div{border-top-color:#cfe0d6}
 .dk-wrap .csblk h4{border-bottom-color:var(--acc)}
 .dk-bg{display:none}
-@media print{
+${page?`@media print{
   @page{size:A4;margin:0}
   html,body{background:#0b100d!important}
   .doc:has(.dk-wrap){padding:0!important}
   .dk-bg{display:block;position:fixed;top:0;left:0;width:210mm;height:297mm;background:#0b100d;z-index:-2}
   .dk-wrap{padding:14mm 13mm 16mm;-webkit-box-decoration-break:clone;box-decoration-break:clone}
   .dk-wrap .cover{min-height:262mm}
-}</style><div class="dk-bg"></div><div class="dk-wrap">${inner}</div>`}
+}`:''}</style>${page?'<div class="dk-bg"></div>':''}<div class="dk-wrap">${inner}</div>`}
+/* papel timbrado em versão escura: inverte a luminosidade e mantém a cor (o verde continua verde) */
+async function darkImg(url){const img=await new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=url});
+  const w=Math.min(img.width,1654),h=Math.round(img.height*w/img.width);const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');
+  x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);const d=x.getImageData(0,0,w,h),a=d.data;
+  for(let i=0;i<a.length;i+=4){const r=a[i]/255,g=a[i+1]/255,b=a[i+2]/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),L=(mx+mn)/2,dl=mx-mn;
+    let hh=0,ss=0;if(dl>1e-6){ss=dl/(1-Math.abs(2*L-1));hh=mx===r?((g-b)/dl)%6:mx===g?(b-r)/dl+2:(r-g)/dl+4;hh*=60;if(hh<0)hh+=360}
+    const L2=.045+(1-L)*.9,C=(1-Math.abs(2*L2-1))*ss,X=C*(1-Math.abs((hh/60)%2-1)),m=L2-C/2;
+    const [R,G,B]=hh<60?[C,X,0]:hh<120?[X,C,0]:hh<180?[0,C,X]:hh<240?[0,X,C]:hh<300?[X,0,C]:[C,0,X];
+    a[i]=Math.round((R+m)*255);a[i+1]=Math.round((G+m)*255+ (1-L)*3);a[i+2]=Math.round((B+m)*255);a[i+3]=255}
+  x.putImageData(d,0,0);return c.toDataURL('image/jpeg',.9)}
+async function ensureDarkLH(){const B=S.brand;if(!B||!B.first||B.dk)return false;try{const first=await darkImg(B.first);const other=B.other===B.first?first:await darkImg(B.other);B.dk={first,other};save();return true}catch(e){return false}}
 /* ---------- papel timbrado ---------- */
 const lhOn=()=>S.brand&&S.brand.on&&S.brand.first?S.brand:null;
 function lhWrap(B,inner){const [t,r,b,l]=B.m.map(v=>Math.max(0,+v||0));
@@ -2185,7 +2198,7 @@ function lhPanelHTML(){const B=S.brand;
   <input type="file" id="lhFileD" accept=".docx" hidden><input type="file" id="lhFileI" accept="image/png,image/jpeg" multiple hidden>`}
 function lhBind(after){
   const pick=(id,cb)=>{const i=$(id);i.value='';i.onchange=()=>cb([...i.files]);i.click()};
-  const done=async B=>{B.acc=B.acc||await accentOf(B.other||B.first);B.on=true;S.brand=B;save();after();toast('Papel timbrado aplicado ao caderno técnico')};
+  const done=async B=>{B.acc=B.acc||await accentOf(B.other||B.first);B.on=true;delete B.dk;S.brand=B;await ensureDarkLH();save();after();toast('Papel timbrado aplicado ao caderno técnico')};
   $('#lhDocx').onclick=()=>pick('#lhFileD',async fs=>{if(!fs[0])return;try{const z=await unzip(await fs[0].arrayBuffer());const r=await docxLetterhead(z);await done({...r,name:fs[0].name})}catch(e){toast(e.message||'Não foi possível ler o Word.')}});
   $('#lhImg').onclick=()=>pick('#lhFileI',async fs=>{if(!fs.length)return;const urls=[];for(const f of fs.slice(0,2))urls.push(await bytesToDataURL(new Uint8Array(await f.arrayBuffer()),f.type));const old=S.brand||{};await done({first:urls[0],other:urls[1]||urls[0],m:old.m||[35,25,30,25],acc:null,name:fs[0].name})});
   if($('#lhOn'))$('#lhOn').onchange=e=>{S.brand.on=e.target.checked;save();after()};
