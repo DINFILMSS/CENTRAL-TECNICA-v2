@@ -342,6 +342,10 @@ body.live .bar i{background:var(--tally)}
 .netpill i{width:8px;height:8px;border-radius:50%;background:var(--phos);flex:none;box-shadow:0 0 8px var(--phos)}
 .netpill.warn i{background:var(--amber);box-shadow:0 0 8px var(--amber)}.netpill.warn{color:var(--amber)}
 .netpill.bad i{background:var(--tally);box-shadow:none}.netpill.bad{color:var(--tally)}
+.addr{margin:-2px 0 12px}.addr-res{display:grid;gap:4px;margin-top:6px;max-height:220px;overflow:auto}
+.addr-res button{display:grid;gap:2px;text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r1);background:var(--raise);color:var(--text);cursor:pointer;font:inherit}
+.addr-res button:hover,.addr-res button:focus-visible{border-color:var(--phos);outline:none}.addr-res b{font-size:13px}.addr-res span{font-size:12px;color:var(--soft)}
+.hero-addr{display:block;font-size:12px;color:var(--soft);margin-top:3px;max-width:340px}.hero-addr a{color:var(--phos)}
 </style>
 </head>
 <body>
@@ -700,7 +704,7 @@ R.dash=()=>{
     <h1 class="eventname">${esc(p.name)}</h1>
     <div class="meta">
       <div><span>Cliente</span><b>${esc(p.client||'—')}</b></div>
-      <div><span>Local</span><b>${esc(p.venue||'—')}</b></div>
+      <div><span>Local</span><b>${esc(p.venue||'—')}</b>${p.address?`<small class="hero-addr">${esc(p.address)} · <a href="#" id="heroMap">Como chegar</a></small>`:''}</div>
       <div><span>Diretor técnico</span><b>${esc(p.td||'—')}</b></div>
       <div><span>Período</span><b>${esc(periodLabel(p))}</b></div>
       <div><span>Próxima entrada no ar</span><b>${dt?dt.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'})+' · '+dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'}</b></div>
@@ -730,6 +734,7 @@ R.dash=()=>{
   </div>`;
   $$('[data-go]').forEach(a=>a.onclick=()=>a.dataset.go==='dash-edit'?editEvent():go(a.dataset.go));
   $('#editEv').onclick=editEvent;
+  $('#heroMap')&&($('#heroMap').onclick=e=>{e.preventDefault();openURL(mapsURL(p,true))});
   $$('.dchip').forEach(b=>b.onclick=()=>{const d=p.days.find(x=>x.id===b.dataset.day);if(d.type==='Evento'||d.type==='Ensaio'){live.day=d.id;live.idx=0;go('rundown')}else editEvent()});
 };
 /* ---------- equipamentos ---------- */
@@ -1334,7 +1339,8 @@ R.report=()=>{
   if($('#rpPdf'))$('#rpPdf').onclick=()=>deskPDF(`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`,`${slug(p.name)}-caderno-tecnico${rpOpts.dark?'-escuro':''}.pdf`);
   $('#rpPrint').onclick=()=>{$('#report').innerHTML=`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`;setTimeout(()=>{try{window.print()}catch(e){toast('Impressão indisponível aqui. Abra o arquivo HTML local.')}},60)};
 };
-const DOC_CSS=`.cslist{columns:2;column-gap:12mm}.csblk{break-inside:avoid;margin:0 0 6mm}.csblk h4{font:700 11pt Archivo,Arial,sans-serif;margin:0 0 2mm;padding-bottom:1mm;border-bottom:1pt solid var(--acc)}.csit{font-size:10pt;line-height:1.5}.csit .num{font-weight:700;margin-right:2pt}
+const DOC_CSS=`.doc .route{display:flex;gap:4mm;align-items:center;margin:6mm 0 0;break-inside:avoid}.doc .route .qr{width:22mm;height:22mm;flex:none;background:#fff;padding:1mm;border:.5pt solid var(--rule)}.doc .route .qr svg{width:100%;height:100%;display:block}.doc .route b{display:block;font-size:10pt}.doc .route span{display:block;font-size:9pt}.doc .route small{display:block;font-size:7.5pt;color:var(--soft);margin-top:1pt}
+.cslist{columns:2;column-gap:12mm}.csblk{break-inside:avoid;margin:0 0 6mm}.csblk h4{font:700 11pt Archivo,Arial,sans-serif;margin:0 0 2mm;padding-bottom:1mm;border-bottom:1pt solid var(--acc)}.csit{font-size:10pt;line-height:1.5}.csit .num{font-weight:700;margin-right:2pt}
 .septb{table-layout:fixed;width:100%}.septb tr.grp td{background:#eef2f0;font-weight:700;font-size:8.5pt;padding-top:5pt}.septb tr{break-inside:avoid}
 .rkgrid{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}.rkgrid figure{width:240px;margin:0;break-inside:avoid}.rkgrid figcaption{font-size:11px;margin-top:4px}
 
@@ -1433,7 +1439,8 @@ function buildReport(p){
   let s=`<style>@media print{@page{@bottom-left{content:"${ft}";font:7pt Archivo,Arial,sans-serif;color:#777}@bottom-right{content:"Página " counter(page) " de " counter(pages);font:7pt Archivo,Arial,sans-serif;color:#777}}}</style>`;
   if(o.cover)s+=`<div class="cover"><div class="band"><div class="brand"><i></i>CENTRAL TÉCNICA <span style="font-weight:500;color:#9fb3a8">by Don</span></div><small>Rev. ${esc(o.rev)} · ${new Date().toLocaleDateString('pt-BR')}</small></div>
     <div class="kind">Caderno técnico de produção</div><h1>${esc(p.name)}</h1>
-    <div class="meta"><div><span>Cliente</span><b>${esc(p.client||'—')}</b></div><div><span>Local</span><b>${esc(p.venue||'—')}</b></div><div><span>Período</span><b>${esc(periodLabel(p))}</b></div><div><span>Entrada no ar</span><b>${showDays(p).filter(d=>d.onair&&d.type==='Evento').map(d=>dayName(d)+' · '+d.onair).join('<br>')||(dt?dt.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})+' · '+dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—')}</b></div><div><span>Responsável técnico</span><b>${esc(o.resp||'—')}</b></div>${p.td?`<div><span>Diretor técnico</span><b>${esc(p.td)}</b>${p.tdPhone?`<small style="display:block;font-size:8pt;color:var(--soft)">${esc(p.tdPhone)}</small>`:''}</div>`:''}<div><span>Duração do programa</span><b class="num">${mmss(total)}</b></div><div><span>Prontidão</span><b class="num">${h.score}/100</b></div></div>
+    <div class="meta"><div><span>Cliente</span><b>${esc(p.client||'—')}</b></div><div><span>Local</span><b>${esc(p.venue||'—')}</b>${p.address?`<small style="display:block;font-size:8pt;color:var(--soft);margin-top:1pt">${esc(p.address)}</small>`:''}</div><div><span>Período</span><b>${esc(periodLabel(p))}</b></div><div><span>Entrada no ar</span><b>${showDays(p).filter(d=>d.onair&&d.type==='Evento').map(d=>dayName(d)+' · '+d.onair).join('<br>')||(dt?dt.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})+' · '+dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—')}</b></div><div><span>Responsável técnico</span><b>${esc(o.resp||'—')}</b></div>${p.td?`<div><span>Diretor técnico</span><b>${esc(p.td)}</b>${p.tdPhone?`<small style="display:block;font-size:8pt;color:var(--soft)">${esc(p.tdPhone)}</small>`:''}</div>`:''}<div><span>Duração do programa</span><b class="num">${mmss(total)}</b></div><div><span>Prontidão</span><b class="num">${h.score}/100</b></div></div>
+    ${p.address||p.geo?`<div class="route"><div class="qr">${qrSVG(mapsURL(p,true),90)}</div><div><b>Como chegar</b><span>${esc(p.venue||'')}${p.venue&&p.address?' — ':''}${esc(p.address||'')}</span><small>Aponte a câmera do celular para o código e a rota abre no Google Maps.</small></div></div>`:''}
     <div class="disc"><b>Documento de planejamento · sujeito a alterações</b>Versão gerada em ${new Date().toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})} (Rev. ${esc(o.rev)}). Equipamentos, horários, roteamentos, metragens e potências podem mudar até o evento e devem ser conferidos no local antes da operação. Em caso de divergência, vale a versão mais recente deste caderno.</div>
     <div class="kpis"><div><span>Equipamentos</span><b>${p.gear.length}</b></div><div><span>Ligações</span><b>${p.links.length}</b></div><div><span>Câmeras</span><b>${p.gear.filter(g=>SHORT(g.model)==='CAM').length}</b></div><div><span>Carga</span><b>${fmt(pw.kva,2)}<small style="font-size:8pt"> kVA</small></b></div><div><span>Equipe</span><b>${p.crew.length}</b></div></div>
     <div class="toc">${secs.map(([k,l])=>`<div><b>${num[k]}</b>${esc(l)}</div>`).join('')}${o.sign?'<div><b>—</b>Assinaturas</div>':''}</div></div>`;
@@ -1454,7 +1461,7 @@ function buildReport(p){
   if(secs.some(x=>x[0]==='cases')&&(p.cases||[]).some(c=>c.items.length))s+=sec('cases','Cases e itens',casesReportHTML(p),brk());
   if(secs.some(x=>x[0]==='sep')&&sepItems(p).length)s+=sec('sep','Separação de equipamentos',sepReportHTML(p,tb,H),brk());
   if(o.sign)s+=`<section class="pb"><h2 class="sec"><b>—</b>Observações e assinaturas</h2>${p.notes?`<h3>Observações do evento</h3><div class="notes">${esc(p.notes)}</div>`:''}${(p.days||[]).some(d=>d.label)?`<h3>Observações por dia</h3>`+tb(['Dia','Tipo','Observação'],p.days.filter(d=>d.label).map(d=>[parseYMD(d.date).toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}),d.type,d.label])):''}<h3>Anotações em campo</h3><div class="lines">${'<div></div>'.repeat(p.notes?4:7)}</div><div class="sign" ${p.td?'style="grid-template-columns:repeat(4,1fr);gap:7mm"':''}>${p.td?`<div>${esc(p.td)}<span>Diretor técnico</span></div>`:''}<div>${esc(o.resp||'')}<span>Responsável técnico</span></div><div><span>Produção</span></div><div>${esc(p.client||'')}<span>Cliente</span></div></div><p class="note" style="margin-top:12mm">Gerado pela Central Técnica by Don em ${new Date().toLocaleString('pt-BR')}. Documento sujeito a alterações.</p></section>`;
-  {const B=lhOn();if(o.dark&&B)s=B.dk?lhWrap({...B,first:B.dk.first,other:B.dk.other},darkWrap(s,false)):lhWrap({...B,inv:true},darkWrap(s,false));else if(o.dark)s=darkWrap(s);else if(B)s=lhWrap(B,s)}
+  s=paperWrap(s,o.dark);
   return s;
 }
 
@@ -1592,6 +1599,7 @@ function editEvent(){
   $('#modal').innerHTML=`<h3>Dados do evento</h3>
   <label class="f"><span>Nome do evento</span><input class="in" id="e_name" value="${esc(p.name)}"></label>
   <div class="row"><label class="f"><span>Cliente</span><input class="in" id="e_client" value="${esc(p.client)}"></label><label class="f"><span>Local</span><input class="in" id="e_venue" value="${esc(p.venue)}"></label></div>
+  <div class="addr"><label class="f" style="margin:0"><span>Endereço do local</span><div class="row" style="gap:6px;flex-wrap:nowrap"><input class="in" id="e_addr" value="${esc(p.address||'')}" placeholder="Busque pelo nome do local ou cole um link do Google Maps" autocomplete="off" style="flex:1;min-width:0"><button class="btn" id="e_find" type="button">Buscar</button>${p.address||p.geo?'<button class="btn ghost" id="e_map" type="button" title="Abrir no Google Maps">Ver no mapa</button>':''}</div></label><div id="e_res" class="addr-res"></div><p class="note" id="e_geo" style="margin:4px 0 0">${p.geo?`Localização: ${p.geo.lat.toFixed(5)}, ${p.geo.lon.toFixed(5)}`:'Digite o nome do lugar (ex.: “Jardim Nacional São Paulo”) e clique em Buscar, ou cole o link de compartilhar do Google Maps.'}</p></div>
   <div class="row"><label class="f"><span>Diretor técnico</span><input class="in" id="e_td" value="${esc(p.td||'')}" list="e_tdl" placeholder="Nome"><datalist id="e_tdl">${p.crew.filter(c=>c.name).map(c=>`<option value="${esc(c.name)}">${esc(c.role||'')}</option>`).join('')}</datalist></label><label class="f"><span>Telefone do diretor técnico</span><input class="in" id="e_tdph" value="${esc(p.tdPhone||'')}" placeholder="(11) 90000-0000"></label></div>
   <div class="row" style="align-items:flex-end"><label class="f"><span>Primeiro dia (montagem)</span><input class="in" type="date" id="e_d0" value="${first}"></label><label class="f"><span>Último dia (desmontagem)</span><input class="in" type="date" id="e_d1" value="${last}"></label><button class="btn" id="e_gen" style="margin-bottom:11px">Gerar dias</button></div>
   <div style="max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:var(--r1);margin-bottom:12px"><table class="t"><thead><tr><th>Dia</th><th>Tipo</th><th>No ar</th><th>Descrição</th><th></th></tr></thead><tbody id="e_days">${rows()}</tbody></table></div>
@@ -1601,13 +1609,14 @@ function editEvent(){
   $('#modalBg').classList.add('open');
   const bind=()=>{$('#e_days').innerHTML=rows();$$('#e_days tr[data-i]').forEach(tr=>{const d=days[+tr.dataset.i];tr.querySelectorAll('[data-k]').forEach(i=>i.onchange=()=>{d[i.dataset.k]=i.value;if(i.dataset.k==='type'){if(!(d.type==='Evento'||d.type==='Ensaio'))d.onair='';else if(!d.onair)d.onair='20:00';bind()}});tr.querySelector('[data-x]').onclick=()=>{days.splice(+tr.dataset.i,1);bind()}})};
   bind();
+  addrPick=undefined;bindAddr(p);
   $('#e_gen').onclick=()=>{const a=parseYMD($('#e_d0').value),b=parseYMD($('#e_d1').value||$('#e_d0').value);if(isNaN(a)||isNaN(b)||b<a){toast('Confira as datas: o último dia não pode ser antes do primeiro.');return}
     const n=Math.round((b-a)/864e5)+1;if(n>60){toast('Período máximo de 60 dias.');return}const out=[];
     for(let i=0;i<n;i++){const dt=new Date(a);dt.setDate(a.getDate()+i);const k=ymd(dt);const ex=days.find(d=>d.date===k);const type=n===1?'Evento':i===0?'Montagem':i===n-1?'Desmontagem':'Evento';out.push(ex||{id:uid(),date:k,type,onair:type==='Evento'?'20:00':'',label:''})}
     days=out;bind()};
   const close=()=>{$('#modalBg').classList.remove('open');$('#modal').style.width=''};
   $('#e_c').onclick=close;
-  $('#e_ok').onclick=()=>{p.name=$('#e_name').value.trim()||p.name;p.client=$('#e_client').value;p.venue=$('#e_venue').value;p.td=$('#e_td').value.trim();p.tdPhone=$('#e_tdph').value.trim();{const c=p.crew.find(c=>c.name&&c.name===p.td);if(c&&!p.tdPhone&&c.phone)p.tdPhone=c.phone}p.notes=$('#e_notes').value;
+  $('#e_ok').onclick=()=>{p.name=$('#e_name').value.trim()||p.name;p.client=$('#e_client').value;p.venue=$('#e_venue').value;p.address=$('#e_addr').value.trim();if(addrPick!==undefined){p.geo=addrPick}if(!p.address)p.geo=null;p.td=$('#e_td').value.trim();p.tdPhone=$('#e_tdph').value.trim();{const c=p.crew.find(c=>c.name&&c.name===p.td);if(c&&!p.tdPhone&&c.phone)p.tdPhone=c.phone}p.notes=$('#e_notes').value;
     const removed=(p.days||[]).filter(d=>!days.some(x=>x.id===d.id)).map(d=>d.id);p.days=days;
     const def=defaultDayId(p);p.rundown.forEach(b=>{if(!b.day||removed.includes(b.day)||!days.some(d=>d.id===b.day))b.day=def});
     syncDate(p);save();close();render()};
@@ -2161,6 +2170,8 @@ ${page?`@media print{
   .dk-wrap{padding:14mm 13mm 16mm;-webkit-box-decoration-break:clone;box-decoration-break:clone}
   .dk-wrap .cover{min-height:262mm}
 }`:''}</style>${page?'<div class="dk-bg"></div>':''}<div class="dk-wrap">${inner}</div>`}
+/* aplica o estilo do PDF (impressão ou escuro) e o papel timbrado, em qualquer documento */
+function paperWrap(s,dark){const B=lhOn();if(dark&&B)return B.dk?lhWrap({...B,first:B.dk.first,other:B.dk.other},darkWrap(s,false)):lhWrap({...B,inv:true},darkWrap(s,false));if(dark)return darkWrap(s);if(B)return lhWrap(B,s);return s}
 /* papel timbrado em versão escura: inverte a luminosidade e mantém a cor (o verde continua verde) */
 async function darkImg(url){const img=await new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=url});
   const w=Math.min(img.width,1654),h=Math.round(img.height*w/img.width);const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');
@@ -2306,6 +2317,30 @@ R.rede=()=>{
   $('#nwNow')&&($('#nwNow').onclick=async()=>{after(await NET.now());toast('Sincronizado')});
   $('#nwUser').onchange=async e=>after(await NET.setUser(e.target.value));
 };
+
+
+/* ---------- endereço do local: busca no mapa ---------- */
+let addrPick;
+const mapsURL=(p,dir)=>{const q=p.geo?`${p.geo.lat},${p.geo.lon}`:(p.address||p.venue||'');if(!q)return '';return dir?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`:`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`};
+function geoFromLink(t){t=String(t);let m=t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||t.match(/[?&](?:q|query|destination|ll)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i)||t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)||t.match(/^\s*(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})\s*$/);return m?{lat:+m[1],lon:+m[2]}:null}
+function openURL(u){if(!u)return;try{window.open(u,'_blank','noopener')}catch(e){}}
+function fmtAddr(r){const a=r.address||{};const rua=[a.road||a.pedestrian||a.footway,a.house_number].filter(Boolean).join(', ');const bairro=a.suburb||a.neighbourhood||a.quarter||'';const cid=a.city||a.town||a.village||a.municipality||'';const uf=(a['ISO3166-2-lvl4']||'').replace('BR-','')||a.state||'';
+  const s=[rua,bairro,[cid,uf].filter(Boolean).join(' - '),a.postcode?'CEP '+a.postcode:''].filter(Boolean).join(' · ');return s||r.display_name}
+function bindAddr(p){
+  const inp=$('#e_addr'),res=$('#e_res'),geo=$('#e_geo');
+  const setGeo=(g,label)=>{addrPick=g;geo.textContent=g?`Localização: ${g.lat.toFixed(5)}, ${g.lon.toFixed(5)}${label?' · '+label:''}`:'';};
+  inp.oninput=()=>{const g=geoFromLink(inp.value);if(g){setGeo(g,'tirada do link');res.innerHTML='';reverse(g)}};
+  const reverse=async g=>{try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=pt-BR&lat=${g.lat}&lon=${g.lon}`).then(r=>r.json());if(r&&r.address){inp.value=fmtAddr(r);if(!$('#e_venue').value.trim()&&r.name)$('#e_venue').value=r.name}}catch(e){}};
+  const find=async()=>{const q=inp.value.trim();if(!q){inp.focus();return}const g=geoFromLink(q);if(g)return inp.oninput();
+    res.innerHTML='<p class="note" style="margin:6px 0">Buscando…</p>';
+    try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=br&accept-language=pt-BR&q=${encodeURIComponent(q)}`).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+      if(!r.length){res.innerHTML=`<p class="note" style="margin:6px 0">Nada encontrado. Tente com cidade (ex.: “${esc(q)} São Paulo”) ou cole o link do Google Maps. <a href="#" id="e_gm" style="color:var(--phos)">Procurar no Google Maps</a></p>`;$('#e_gm').onclick=e=>{e.preventDefault();openURL(`https://www.google.com/maps/search/${encodeURIComponent(q)}`)};return}
+      res.innerHTML=r.map((x,i)=>`<button type="button" data-i="${i}"><b>${esc(x.name||fmtAddr(x).split(' · ')[0])}</b><span>${esc(fmtAddr(x))}</span></button>`).join('');
+      $$('#e_res [data-i]').forEach(b=>b.onclick=()=>{const x=r[+b.dataset.i];inp.value=fmtAddr(x);if(!$('#e_venue').value.trim()&&x.name)$('#e_venue').value=x.name;setGeo({lat:+x.lat,lon:+x.lon});res.innerHTML=''})}
+    catch(e){res.innerHTML=`<p class="note" style="margin:6px 0;color:var(--amber)">Sem acesso à busca agora. Abra o <a href="#" id="e_gm" style="color:var(--phos)">Google Maps</a>, procure o local, toque em Compartilhar e cole o link aqui.</p>`;$('#e_gm').onclick=ev=>{ev.preventDefault();openURL(`https://www.google.com/maps/search/${encodeURIComponent(q)}`)}}};
+  $('#e_find').onclick=find;inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();find()}};
+  $('#e_map')&&($('#e_map').onclick=()=>openURL(mapsURL({geo:addrPick!==undefined?addrPick:p.geo,address:inp.value,venue:$('#e_venue').value})));
+}
 
 /* ---------- sugestão de metragem ---------- */
 const STD_LEN={SDI:[0.5,1,2,3,5,10,15,20,25,30,40,50,75,100],Fibra:[25,50,100,150,200,300,500],HDMI:[0.5,1,2,3,5,10,15],Rede:[0.5,1,2,3,5,10,15,20,30,50,75,100],'Áudio':[1,2,3,5,10,15,20,30,50,100],REF:[1,2,3,5,10,15,20,30,50,100]};
@@ -2518,7 +2553,7 @@ function camSheetHTML(p,g){
   <div class="two"><div>
    <h3>Operação</h3><table><tbody>
     <tr><th>Operador</th><td><b>${esc(x.cs.op||'—')}</b></td></tr>
-    <tr><th>Intercom</th><td>${esc(x.crew?.ic||'—')}</td></tr><tr><th>Rádio</th><td>${esc(x.crew?.radio||'—')}</td></tr>${p.td?`<tr><th>Diretor técnico</th><td>${esc(p.td)}${p.tdPhone?' · '+esc(p.tdPhone):''}</td></tr>`:''}
+    ${p.address?`<tr><th>Local</th><td>${esc(p.venue||'')}${p.venue?'<br>':''}<span style="font-size:8pt">${esc(p.address)}</span></td></tr>`:''}<tr><th>Intercom</th><td>${esc(x.crew?.ic||'—')}</td></tr><tr><th>Rádio</th><td>${esc(x.crew?.radio||'—')}</td></tr>${p.td?`<tr><th>Diretor técnico</th><td>${esc(p.td)}${p.tdPhone?' · '+esc(p.tdPhone):''}</td></tr>`:''}
     <tr><th>Lente</th><td>${esc(x.cs.lens||'—')}</td></tr>
     <tr><th>Posição</th><td>${esc(x.cs.pos||'—')}</td></tr>
     ${x.fl?`<tr><th>Focal / abertura</th><td>${x.fl.focal} mm · ${fmt(fovOf(x.fl),1)}°</td></tr>`:''}
@@ -2528,20 +2563,22 @@ function camSheetHTML(p,g){
   <h3>Blocos em que abre o programa</h3>${x.blocks.length?`<table><thead><tr><th>#</th><th>Entrada</th><th>Bloco</th><th>Tipo</th><th>Duração</th><th>Observações</th></tr></thead><tbody>${x.blocks.map(({b,i})=>`<tr><td class="num">${T[b.id]?String(T[b.id].i+1).padStart(2,'0'):''}</td><td class="num">${T[b.id]&&T[b.id].day&&showDays(p).length>1?esc(dayName(T[b.id].day))+' ':''}${T[b.id]&&T[b.id].t?T[b.id].t.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):mmss(T[b.id]?T[b.id].s:0)}</td><td><b>${esc(b.title)}</b></td><td>${esc(b.type)}</td><td class="num">${mmss(b.dur)}</td><td>${esc(b.notes)}</td></tr>`).join('')}</tbody></table>`:'<p class="note">Nenhum bloco do espelho abre nesta câmera.</p>'}
   <h3>Orientações</h3><div style="white-space:pre-wrap;min-height:20mm;border:.5pt solid #ccc;padding:6pt">${esc(x.cs.notes||'')}</div></section>`;
 }
-const CS_CSS=`.doc .camsheet .cs-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2pt solid #111;padding-bottom:6pt;margin-bottom:10pt}
-.doc .camsheet .cs-head span{font-size:8pt;color:#0a8f45;font-weight:700}
+const CS_CSS=`.doc .camsheet .cs-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2pt solid var(--ink);padding-bottom:6pt;margin-bottom:10pt}
+.doc .camsheet .cs-head span{font-size:8pt;color:var(--acc);font-weight:700}
 .doc .camsheet h1{font:900 38pt/.9 Archivo,Arial Narrow,sans-serif;font-stretch:65%;margin:2pt 0;text-transform:uppercase}
-.doc .camsheet .cs-in{text-align:right;border:2pt solid #111;padding:5pt 10pt}
+.doc .camsheet .cs-in{text-align:right;border:2pt solid var(--ink);padding:5pt 10pt}
 .doc .camsheet .cs-in b{display:block;font:800 30pt/1 'JetBrains Mono',monospace}
-.doc .camsheet .cs-in small{font-size:8pt;color:#555}
-.doc .camsheet th{width:30%;background:none;border-bottom:.5pt solid #d5d9d6;color:#555;font-weight:600}
+.doc .camsheet .cs-in small{font-size:8pt;color:var(--soft)}
+.doc .camsheet th{width:30%;background:none;border-bottom:.5pt solid var(--rule);color:var(--soft);font-weight:600}
+.doc .dk-wrap .camsheet th{background:none;color:var(--soft)}
+.doc .lh-wrap .camsheet h1{font-size:34pt}
 .doc .camsheet section.pb:first-child{break-before:auto}
 .doc-preview .camsheet.pb{border:0;margin:0;padding:0}`;
-let csSel=null;
+let csSel=null,csDark=null;
 R.camsheets=()=>{
-  const p=cur();const cams=camGear(p);if(!csSel||!gearById(csSel))csSel=cams[0]?.id||null;const g=csSel&&gearById(csSel);
+  const p=cur();const cams=camGear(p);if(!csSel||!gearById(csSel))csSel=cams[0]?.id||null;const g=csSel&&gearById(csSel);if(csDark===null)csDark=!!(rpOpts&&rpOpts.dark);const csDoc=list=>paperWrap(list.map(c=>camSheetHTML(p,c)).join(''),csDark);
   $('#view').innerHTML=`<style>${DOC_CSS}${CS_CSS}</style><div class="vhead"><div><h1>Folhas de câmera</h1><p>Uma página por câmera para entregar ao operador: entrada no switcher, ligações, intercom, lente, posição na planta e os blocos do espelho em que ela abre.</p></div>
-  <div class="acts"><button class="btn" id="csOne" ${g?'':'disabled'}>${DESK?'PDF desta':'Imprimir esta'}</button><button class="btn go" id="csAll" ${cams.length?'':'disabled'}>${DESK?'PDF de todas':'Imprimir todas'} (${cams.length})</button></div></div>
+  <div class="acts"><div class="seg" id="csMode" title="Estilo do PDF"><button data-m="print" class="${csDark?'':'on'}">Impressão</button><button data-m="dark" class="${csDark?'on':''}">Escuro</button></div><button class="btn" id="csOne" ${g?'':'disabled'}>${DESK?'PDF desta':'Imprimir esta'}</button><button class="btn go" id="csAll" ${cams.length?'':'disabled'}>${DESK?'PDF de todas':'Imprimir todas'} (${cams.length})</button></div></div>
   ${cams.length?`<div class="grid side-l" style="grid-template-columns:300px 1fr"><div class="panel">
    <div class="seg" style="flex-wrap:wrap;display:flex;margin-bottom:14px">${cams.map(c=>`<button data-c="${c.id}" class="${c.id===csSel?'on':''}">${esc(c.name)}</button>`).join('')}</div>
    ${(()=>{const x=camInfo(p,g);return `<label class="f"><span>Operador</span><select class="in" data-cs="op"><option value="">—</option>${p.crew.map(c=>`<option ${c.name===x.cs.op?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>
@@ -2549,11 +2586,13 @@ R.camsheets=()=>{
    <label class="f"><span>Posição</span><input class="in" data-cs="pos" value="${esc(x.cs.pos)}" placeholder="Ex.: praticável central, 3 m"></label>
    <label class="f"><span>Orientações para o operador</span><textarea class="in" data-cs="notes" rows="5">${esc(x.cs.notes)}</textarea></label>
    <p class="note">Intercom e rádio vêm da Equipe; entrada e ligações vêm do Patch; blocos vêm do Espelho (coluna Fonte com o mesmo nome da câmera).</p>`})()}
-  </div><div class="doc-preview"><div class="doc">${camSheetHTML(p,g)}</div></div></div>`:'<div class="empty"><b>Nenhuma câmera no projeto</b>Adicione câmeras em Equipamentos, use um kit ou o gerador de patch.</div>'}`;
+  </div><div class="doc-preview"><div class="doc">${csDoc([g])}</div></div></div>`:'<div class="empty"><b>Nenhuma câmera no projeto</b>Adicione câmeras em Equipamentos, use um kit ou o gerador de patch.</div>'}`;
   $$('[data-c]').forEach(b=>b.onclick=()=>{csSel=b.dataset.c;R.camsheets()});
-  $$('[data-cs]').forEach(i=>{const fn=()=>{camInfo(p,g).cs[i.dataset.cs]=i.value;save();$('.doc-preview .doc').innerHTML=camSheetHTML(p,g)};i.oninput=fn;i.onchange=fn});
-  const pr=list=>{$('#report').innerHTML=`<style>${DOC_CSS}${CS_CSS}@media print{@page{@bottom-left{content:"${String(p.name).replace(/["\\]/g,'')} · folhas de câmera";font:7pt Arial;color:#777}}}</style><div class="doc">${list.map(c=>camSheetHTML(p,c)).join('')}</div>`;setTimeout(()=>{try{window.print()}catch(e){toast('Impressão indisponível aqui. Abra o arquivo HTML local.')}},60)};
-  if(DESK){const pdf=list=>deskPDF(`<style>${DOC_CSS}${CS_CSS}</style><div class="doc">${list.map(c=>camSheetHTML(p,c)).join('')}</div>`,`${slug(p.name)}-folhas-de-camera.pdf`);$('#csOne')&&($('#csOne').onclick=()=>pdf([g]));$('#csAll')&&($('#csAll').onclick=()=>pdf(cams));return}
+  $$('[data-cs]').forEach(i=>{const fn=()=>{camInfo(p,g).cs[i.dataset.cs]=i.value;save();$('.doc-preview .doc').innerHTML=csDoc([g])};i.oninput=fn;i.onchange=fn});
+  $$('#csMode button').forEach(b=>b.onclick=()=>{csDark=b.dataset.m==='dark';R.camsheets()});
+  if(S.brand&&S.brand.first&&!S.brand.dk)ensureDarkLH().then(ok=>{if(ok&&csDark&&view==='camsheets')R.camsheets()});
+  const pr=list=>{$('#report').innerHTML=`<style>${DOC_CSS}${CS_CSS}@media print{@page{@bottom-left{content:"${String(p.name).replace(/["\\]/g,'')} · folhas de câmera";font:7pt Arial;color:#777}}}</style><div class="doc">${csDoc(list)}</div>`;setTimeout(()=>{try{window.print()}catch(e){toast('Impressão indisponível aqui. Abra o arquivo HTML local.')}},60)};
+  if(DESK){const pdf=list=>deskPDF(`<style>${DOC_CSS}${CS_CSS}</style><div class="doc">${csDoc(list)}</div>`,`${slug(p.name)}-folhas-de-camera${csDark?'-escuro':''}.pdf`);$('#csOne')&&($('#csOne').onclick=()=>pdf([g]));$('#csAll')&&($('#csAll').onclick=()=>pdf(cams));return}
   $('#csOne')&&($('#csOne').onclick=()=>pr([g]));$('#csAll')&&($('#csAll').onclick=()=>pr(cams));
 };
 
