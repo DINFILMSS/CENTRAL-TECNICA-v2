@@ -60,6 +60,9 @@ ipcMain.on('state:save', (e, json) => {
   } catch (err) { console.error('Falha ao salvar', err); }
 });
 ipcMain.on('app:info', (e) => { e.returnValue = { version: app.getVersion(), backupDir: BACKUP_DIR(), platform: process.platform }; });
+ipcMain.handle('update:check', async () => { checkUpdatesNow(); return true; });
+ipcMain.handle('update:install', async () => { if (updater && updateReady) { if (win) win.webContents.send('menu', 'flush'); setTimeout(() => updater.quitAndInstall(false, true), 400); return true; } checkUpdatesNow(); return false; });
+ipcMain.handle('update:downloads', async () => { const u = releasesURL(); if (u) shell.openExternal(u); return !!u; });
 ipcMain.handle('backup:folder', async () => { fs.mkdirSync(BACKUP_DIR(), { recursive: true }); return shell.openPath(BACKUP_DIR()); });
 
 /* ---------- PDF direto, sem janela de impressão ---------- */
@@ -117,7 +120,7 @@ function setupUpdater() {
     manualCheck = false;
   });
   updater.on('download-progress', p => { if (win) win.setProgressBar(Math.max(0.02, (p.percent || 0) / 100)); });
-  updater.on('update-downloaded', info => { if (win) win.setProgressBar(-1); updateReady = info.version; askRestart(info.version); });
+  updater.on('update-downloaded', info => { if (win) { win.setProgressBar(-1); win.webContents.send('menu', 'update-ready:' + info.version); } updateReady = info.version; askRestart(info.version); });
   updater.on('update-not-available', () => {
     if (manualCheck) box({ type: 'info', buttons: ['OK'], title: 'Central Técnica', message: 'Você já está na versão mais recente.', detail: `Versão ${app.getVersion()}` });
     manualCheck = false;
@@ -167,7 +170,7 @@ function buildMenu() {
       { type: 'separator' }, { role: 'togglefullscreen', label: 'Tela cheia' }
     ] },
     { label: 'Janela', submenu: [{ role: 'minimize', label: 'Minimizar' }, { role: 'close', label: 'Fechar' }] },
-    { label: 'Ajuda', submenu: [{ label: `Versão ${app.getVersion()}`, enabled: false }, { label: 'Tour rápido pelas telas', click: () => send('tour') }, { label: 'Procurar atualizações…', click: () => checkUpdatesNow() }, { label: 'Página de downloads', click: () => { const u = releasesURL(); if (u) shell.openExternal(u); } }, { type: 'separator' }, { label: 'Mostrar ferramentas de diagnóstico', accelerator: 'CmdOrCtrl+Alt+I', click: () => win && win.webContents.toggleDevTools() }] }
+    { label: 'Ajuda', submenu: [{ label: `Versão ${app.getVersion()}`, enabled: false }, { label: 'Tour rápido pelas telas', click: () => send('tour') }, { label: 'Versão e atualizações…', click: () => send('about') }, { label: 'Procurar atualizações…', click: () => checkUpdatesNow() }, { label: 'Página de downloads', click: () => { const u = releasesURL(); if (u) shell.openExternal(u); } }, { type: 'separator' }, { label: 'Mostrar ferramentas de diagnóstico', accelerator: 'CmdOrCtrl+Alt+I', click: () => win && win.webContents.toggleDevTools() }] }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(tpl));
 }

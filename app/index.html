@@ -336,12 +336,14 @@ body.live .bar i{background:var(--tally)}
 .case .ci .row{gap:4px;flex-wrap:nowrap}.case .ci input[data-if="qty"]{width:54px;text-align:center;padding:5px;flex:none}.case .ci input[data-if="name"]{flex:1;min-width:0;padding:5px 8px}
 .case .csAdd{border-style:dashed;padding:6px 8px;font-size:12.5px}
 .case footer{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+.updbar{position:fixed;right:18px;bottom:18px;z-index:250;display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--phos);border-radius:var(--r1);padding:10px 12px 10px 16px;box-shadow:0 12px 40px rgba(0,0,0,.55);font-size:13.5px}
+.updbar b{color:var(--phos)}
 </style>
 </head>
 <body>
 <div class="app">
   <header class="master">
-    <div class="brand"><span class="lamp" aria-hidden="true"></span><div><b>CENTRAL TÉCNICA</b><small>by Don · V46</small></div></div>
+    <div class="brand" id="brandBtn" title="Versão e atualizações" style="cursor:pointer"><span class="lamp" aria-hidden="true"></span><div><b>CENTRAL TÉCNICA</b><small id="brandVer">by Don · V46</small></div></div>
     <div class="projsel">
       <select id="projSel" aria-label="Projeto atual"></select>
       <button class="iconbtn" id="newProj" title="Novo projeto">+ Projeto</button>
@@ -2125,8 +2127,7 @@ function lhWrap(B,inner){const [t,r,b,l]=B.m.map(v=>Math.max(0,+v||0));
   return `<style>.doc:has(.lh-wrap){${B.acc?`--acc:${B.acc};`:''}}
 .lh-bg,.lh-bg1{display:none}
 .doc-preview .doc:has(.lh-wrap){padding:0;position:relative;overflow:hidden}
-.doc-preview .lh-bg1{display:block;position:absolute;top:0;left:0;width:100%;height:auto;pointer-events:none}
-.doc-preview .lh-wrap{position:relative;padding:${t}mm ${r}mm ${b}mm ${l}mm}
+.doc-preview .lh-wrap{position:relative;padding:${t}mm ${r}mm ${b}mm ${l}mm;border-style:solid;border-width:0;border-image-source:url("${B.first}");border-image-slice:${(t/297*100).toFixed(3)}% 0 ${(b/297*100).toFixed(3)}% 0 fill;border-image-width:${t}mm 0 ${b}mm 0;border-image-repeat:stretch}
 .doc-preview .lh-wrap .pb{border-top-color:#9db3a7}
 .lh-wrap .cover .band{background:transparent;color:var(--ink);padding:0 0 3mm;border-bottom:1.5pt solid var(--ink)}
 .lh-wrap .cover .band small{color:var(--soft)}
@@ -2474,7 +2475,7 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('resize',()=>{if(view==='patch')applyPV()});
 
 function deskPDF(body,name){const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><link rel="stylesheet" href="fonts/fonts.css"><style>body{margin:0;background:#fff}</style></head><body>${body}</body></html>`;toast('Gerando PDF…');DESK.savePDF(html,name).then(f=>{if(f)toast('PDF salvo e aberto')}).catch(()=>toast('Não foi possível gerar o PDF.'))}
-if(DESK){DESK.onMenu(cmd=>{if(cmd==='undo'||cmd==='redo'){if(isTyping())document.execCommand(cmd);else undo(cmd==='undo'?-1:1);return}if(cmd==='tour')return tourStart();if(cmd==='flush'){clearTimeout(saveT);try{DESK.saveState(JSON.stringify(S))}catch(e){}return}if(cmd.startsWith('go:'))return go(cmd.slice(3));
+if(DESK){DESK.onMenu(cmd=>{if(cmd.startsWith('update-ready:'))return updBar(cmd.slice(13));if(cmd==='about')return aboutBox();if(cmd==='undo'||cmd==='redo'){if(isTyping())document.execCommand(cmd);else undo(cmd==='undo'?-1:1);return}if(cmd==='tour')return tourStart();if(cmd==='flush'){clearTimeout(saveT);try{DESK.saveState(JSON.stringify(S))}catch(e){}return}if(cmd.startsWith('go:'))return go(cmd.slice(3));
   if(cmd==='palette')return openPal();if(cmd==='onair')return $('#onair').click();if(cmd==='newproj')return $('#newProj').click();
   if(cmd==='backup-save')return download(`central-tecnica-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(S),'application/json');
   if(cmd==='backup-open'){go('backup');setTimeout(()=>$('#bImp')&&$('#bImp').click(),50)}});}
@@ -3892,6 +3893,24 @@ function welcome(){
     else if(w==='model'){S.dropDemo=demo?demo.id:null;save();go('models');if(t)setTimeout(tourStart,250)}
     else{save();go('dash');if(t)setTimeout(tourStart,250)}});
 }
+
+
+/* ---------- versão e atualizações ---------- */
+const APPV=(()=>{try{return DESK&&DESK.info?DESK.info().version:null}catch(e){return null}})();
+if(APPV)$('#brandVer').textContent='by Don · v'+APPV;
+function updBar(v){let b=$('#updBar');if(!b){b=document.createElement('div');b.id='updBar';b.className='updbar';document.body.appendChild(b)}
+  b.innerHTML=`<span>Versão <b>${esc(v)}</b> pronta para instalar</span><button class="btn sm go" id="updGo">Reiniciar e atualizar</button><button class="btn sm ghost" id="updX" aria-label="Fechar">✕</button>`;
+  $('#updGo').onclick=()=>{try{DESK.installUpdate()}catch(e){}};$('#updX').onclick=()=>b.remove()}
+function aboutBox(){
+  const canUpd=!!(DESK&&DESK.checkUpdates);
+  $('#modal').innerHTML=`<h3>Central Técnica by Don</h3><p class="sub" style="margin:0 0 14px">${APPV?`Aplicativo instalado · versão <b>${esc(APPV)}</b>`:'Versão de navegador · V46'}</p>
+  ${canUpd?`<p style="font-size:13.5px;color:var(--soft);margin:0 0 14px">O app procura versão nova sozinho ao abrir e a cada 4 horas. No Windows ela é baixada e instalada ao reiniciar; no Mac abre a página de download.</p><div class="row" style="justify-content:space-between"><button class="btn" id="abDl">Página de downloads</button><span class="row"><button class="btn ghost" id="abC">Fechar</button><button class="btn go" id="abUp">Procurar atualizações agora</button></span></div>`
+  :`<p style="font-size:13.5px;color:var(--soft);margin:0 0 14px">${DESK?'Esta instalação é anterior à atualização automática. Baixe a versão mais nova na página de downloads e instale por cima — os projetos continuam salvos.':'Esta é a versão de navegador: ela sempre abre na versão mais recente.'}</p><div class="row" style="justify-content:flex-end"><button class="btn ghost" id="abC">Fechar</button></div>`}`;
+  $('#modalBg').classList.add('open');const close=()=>$('#modalBg').classList.remove('open');$('#abC').onclick=close;
+  if($('#abUp'))$('#abUp').onclick=()=>{close();DESK.checkUpdates();toast('Procurando atualizações…')};
+  if($('#abDl'))$('#abDl').onclick=()=>{close();DESK.openDownloads()};
+}
+$('#brandBtn').onclick=aboutBox;
 
 render();requestAnimationFrame(tick);
 histReset();
