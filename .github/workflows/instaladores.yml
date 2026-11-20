@@ -40,13 +40,9 @@ jobs:
               --notes "Windows: baixe o arquivo **Central-Tecnica-Setup-$V.exe**. Mac: baixe o **Central-Tecnica-$V-mac.dmg**. Quem já tem o app instalado recebe o aviso de atualização automaticamente."
           fi
 
-  instalador:
+  windows:
     needs: preparar
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -67,8 +63,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+  # Publica assim que o Windows fica pronto: a fila de máquinas Mac do GitHub às vezes demora horas.
   publicar:
-    needs: [preparar, instalador]
+    needs: [preparar, windows]
     runs-on: ubuntu-latest
     steps:
       - name: Publicar a versão
@@ -76,3 +73,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           V: ${{ needs.preparar.outputs.versao }}
         run: gh release edit "v$V" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+  # O Mac gera o instalador e anexa na versão já publicada, quando conseguir máquina.
+  mac:
+    needs: preparar
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependências
+        run: npm install
+      - name: Apontar atualizações para este repositório
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.build.publish={provider:'github',owner:process.env.OWNER,repo:process.env.REPO,releaseType:'draft'};fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+      - name: Gerar instalador
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Anexar na versão
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ needs.preparar.outputs.versao }}
+        run: |
+          cd dist
+          gh release upload "v$V" --repo "$GITHUB_REPOSITORY" --clobber *.dmg *.zip *.blockmap latest-mac.yml
