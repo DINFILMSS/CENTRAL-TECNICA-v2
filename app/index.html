@@ -1448,7 +1448,7 @@ function buildReport(p){
   if(secs.some(x=>x[0]==='cases')&&(p.cases||[]).some(c=>c.items.length))s+=sec('cases','Cases e itens',casesReportHTML(p),brk());
   if(secs.some(x=>x[0]==='sep')&&sepItems(p).length)s+=sec('sep','Separação de equipamentos',sepReportHTML(p,tb,H),brk());
   if(o.sign)s+=`<section class="pb"><h2 class="sec"><b>—</b>Observações e assinaturas</h2>${p.notes?`<h3>Observações do evento</h3><div class="notes">${esc(p.notes)}</div>`:''}${(p.days||[]).some(d=>d.label)?`<h3>Observações por dia</h3>`+tb(['Dia','Tipo','Observação'],p.days.filter(d=>d.label).map(d=>[parseYMD(d.date).toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}),d.type,d.label])):''}<h3>Anotações em campo</h3><div class="lines">${'<div></div>'.repeat(p.notes?4:7)}</div><div class="sign" ${p.td?'style="grid-template-columns:repeat(4,1fr);gap:7mm"':''}>${p.td?`<div>${esc(p.td)}<span>Diretor técnico</span></div>`:''}<div>${esc(o.resp||'')}<span>Responsável técnico</span></div><div><span>Produção</span></div><div>${esc(p.client||'')}<span>Cliente</span></div></div><p class="note" style="margin-top:12mm">Gerado pela Central Técnica by Don em ${new Date().toLocaleString('pt-BR')}. Documento sujeito a alterações.</p></section>`;
-  {const B=lhOn();if(o.dark&&B&&B.dk)s=lhWrap({...B,first:B.dk.first,other:B.dk.other},darkWrap(s,false));else if(o.dark)s=darkWrap(s);else if(B)s=lhWrap(B,s)}
+  {const B=lhOn();if(o.dark&&B)s=B.dk?lhWrap({...B,first:B.dk.first,other:B.dk.other},darkWrap(s,false)):lhWrap({...B,inv:true},darkWrap(s,false));else if(o.dark)s=darkWrap(s);else if(B)s=lhWrap(B,s)}
   return s;
 }
 
@@ -2165,14 +2165,14 @@ async function darkImg(url){const img=await new Promise((r,j)=>{const i=new Imag
     const [R,G,B]=hh<60?[C,X,0]:hh<120?[X,C,0]:hh<180?[0,C,X]:hh<240?[0,X,C]:hh<300?[X,0,C]:[C,0,X];
     a[i]=Math.round((R+m)*255);a[i+1]=Math.round((G+m)*255+ (1-L)*3);a[i+2]=Math.round((B+m)*255);a[i+3]=255}
   x.putImageData(d,0,0);return c.toDataURL('image/jpeg',.9)}
-async function ensureDarkLH(){const B=S.brand;if(!B||!B.first||B.dk)return false;try{const first=await darkImg(B.first);const other=B.other===B.first?first:await darkImg(B.other);B.dk={first,other};save();return true}catch(e){return false}}
+async function ensureDarkLH(){const B=S.brand;if(!B||!B.first||B.dk)return false;if(ensureDarkLH.busy)return ensureDarkLH.busy;return ensureDarkLH.busy=(async()=>{try{const first=await darkImg(B.first);const other=B.other===B.first?first:await darkImg(B.other);B.dk={first,other};save();return true}catch(e){console.warn('timbrado escuro',e);return false}finally{ensureDarkLH.busy=null}})()}
 /* ---------- papel timbrado ---------- */
 const lhOn=()=>S.brand&&S.brand.on&&S.brand.first?S.brand:null;
 function lhWrap(B,inner){const [t,r,b,l]=B.m.map(v=>Math.max(0,+v||0));
   return `<style>.doc:has(.lh-wrap){${B.acc?`--acc:${B.acc};`:''}}
 .lh-bg,.lh-bg1{display:none}
 .doc-preview .doc:has(.lh-wrap){padding:0;position:relative;overflow:hidden}
-.doc-preview .lh-wrap{position:relative;padding:${t}mm ${r}mm ${b}mm ${l}mm;border-style:solid;border-width:0;border-image-source:url("${B.first}");border-image-slice:${(t/297*100).toFixed(3)}% 0 ${(b/297*100).toFixed(3)}% 0 fill;border-image-width:${t}mm 0 ${b}mm 0;border-image-repeat:stretch}
+.doc-preview .lh-wrap{position:relative;padding:${t}mm ${r}mm ${b}mm ${l}mm;border-style:solid;border-width:0;border-image-source:url("${B.first}");border-image-slice:${(t/297*100).toFixed(3)}% 0 ${(b/297*100).toFixed(3)}% 0 fill;border-image-width:${t}mm 0 ${b}mm 0;border-image-repeat:stretch}${B.inv?'.doc-preview .lh-wrap{border-image:none}':''}
 .doc-preview .lh-wrap .pb{border-top-color:#9db3a7}
 .lh-wrap .cover .band{background:transparent;color:var(--ink);padding:0 0 3mm;border-bottom:1.5pt solid var(--ink)}
 .lh-wrap .cover .band small{color:var(--soft)}
@@ -2182,8 +2182,8 @@ function lhWrap(B,inner){const [t,r,b,l]=B.m.map(v=>Math.max(0,+v||0));
 @media print{
   @page{size:A4;margin:0}
   .doc:has(.lh-wrap){background:transparent!important;padding:0!important}
-  .lh-bg{display:block;position:fixed;top:0;left:0;width:210mm;height:297mm;z-index:-2}
-  .lh-bg1{display:block;position:absolute;top:0;left:0;width:210mm;height:297mm;z-index:-1}
+  .lh-bg{display:block;position:fixed;top:0;left:0;width:210mm;height:297mm;z-index:-2${B.inv?';background:#fff;filter:invert(.955) hue-rotate(180deg)':''}}
+  .lh-bg1{display:block;position:absolute;top:0;left:0;width:210mm;height:297mm;z-index:-1${B.inv?';background:#fff;filter:invert(.955) hue-rotate(180deg)':''}}
   .lh-wrap{padding:${t}mm ${r}mm ${b}mm ${l}mm;-webkit-box-decoration-break:clone;box-decoration-break:clone}
   .lh-wrap .cover{min-height:calc(297mm - ${t+b+3}mm)}
 }</style><img class="lh-bg" src="${B.other||B.first}" alt=""><img class="lh-bg1" src="${B.first}" alt=""><div class="lh-wrap">${inner}</div>`}
@@ -3961,6 +3961,7 @@ render();requestAnimationFrame(tick);
 histReset();
 $('#undoBtn').onclick=()=>undo(-1);$('#redoBtn').onclick=()=>undo(1);$('#helpBtn').onclick=tourStart;
 if(FRESH&&!S.onboard&&!navigator.webdriver)setTimeout(welcome,400);
+setTimeout(()=>{ensureDarkLH()},1500);
 </script>
 </body>
 </html>
