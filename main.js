@@ -6,6 +6,7 @@ const os = require('os');
 const { pathToFileURL } = require('url');
 let updater = null;
 try { updater = require('electron-updater').autoUpdater; } catch (e) { updater = null; }
+const { FolderSync } = require('./sync');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
@@ -48,10 +49,64 @@ function createWindow() {
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) { e.preventDefault(); if (/^https?:/i.test(url)) shell.openExternal(url); } });
 }
 
+/* ---------- pasta compartilhada (rede / Google Drive) ---------- */
+const NET_FILE = () => path.join(app.getPath('userData'), 'rede.json');
+let net = readJSON(NET_FILE(), {});           // { dir, user, synced: [] }
+let sync = null, syncTimers = [], lastState = null, wasOk = true;
+const MACHINE = os.hostname().replace(/\.local$/, '') || 'Computador';
+function netSave() { try { writeAtomic(NET_FILE(), JSON.stringify(net)); } catch (e) {} }
+function toApp(type, data) { if (win && !win.isDestroyed()) win.webContents.send('sync', type, data); }
+function startSync() {
+  stopSync();
+  if (!net.dir) return;
+  sync = new FolderSync({ dir: net.dir, machine: MACHINE, user: net.user || os.userInfo().username, onEvent: (t, d) => {
+    if (t === 'status') { if (d.ok && !wasOk && lastState) { try { sync.save(lastState); } catch (e) {} } wasOk = d.ok; }
+    toApp(t, d);
+  } });
+  syncTimers = [setInterval(() => { try { sync.poll(); net.synced = sync.syncedIds(); } catch (e) {} }, 4000), setInterval(() => { try { sync.heartbeat(); } catch (e) {} }, 15000)];
+  setTimeout(() => { try { sync.heartbeat(); } catch (e) {} }, 2500);
+}
+function stopSync() { syncTimers.forEach(clearInterval); syncTimers = []; if (sync) { try { sync.leave(); } catch (e) {} } sync = null; }
+function syncInfo() { return { enabled: !!net.dir, dir: net.dir || '', user: net.user || os.userInfo().username, machine: MACHINE, ok: sync ? sync.ok : false, error: sync ? sync.lastError : '' }; }
+ipcMain.on('sync:info', (e) => { e.returnValue = syncInfo(); });
+ipcMain.handle('sync:choose', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Escolha a pasta compartilhada', properties: ['openDirectory', 'createDirectory'], defaultPath: net.dir || (process.platform === 'win32' ? 'G:\\' : app.getPath('home')) });
+  if (r.canceled || !r.filePaths[0]) return syncInfo();
+  const dir = r.filePaths[0];
+  const probe = new FolderSync({ dir, machine: MACHINE });
+  if (!probe.accessible()) { await dialog.showMessageBox(win, { type: 'warning', title: 'Pasta compartilhada', message: 'Não consegui gravar nessa pasta.', detail: 'Confira se o Google Drive (ou a rede) está conectado e se você tem permissão de escrita. Detalhe: ' + probe.lastError }); return syncInfo(); }
+  const there = probe.listIds().length;
+  const local = readJSON(DATA_FILE(), { projects: [] }) || { projects: [] };
+  const mine = (local.projects || []).length;
+  const c = await dialog.showMessageBox(win, { type: 'question', buttons: ['Conectar', 'Cancelar'], defaultId: 0, cancelId: 1, title: 'Pasta compartilhada',
+    message: there ? `A pasta já tem ${there} projeto(s).` : 'A pasta está vazia.',
+    detail: `${there ? 'Os projetos dela aparecem neste computador e ' : ''}os ${mine} projeto(s) deste computador ${there ? 'são juntados a eles' : 'vão para a pasta'}. Nada é apagado. Racks, kits, modelos, cases, estoque e papel timbrado também passam a ser compartilhados.\n\nPasta: ${dir}` });
+  if (c.response !== 0) return syncInfo();
+  net.dir = dir; net.synced = []; netSave(); startSync();
+  const merged = sync.load(local, []).state;
+  sync.save(merged); net.synced = sync.syncedIds(); netSave();
+  lastState = merged; try { writeAtomic(DATA_FILE(), JSON.stringify(merged)); } catch (e) {}
+  toApp('reload', merged);
+  return syncInfo();
+});
+ipcMain.handle('sync:disconnect', async () => { net.dir = ''; netSave(); stopSync(); return syncInfo(); });
+ipcMain.handle('sync:open', async () => net.dir ? shell.openPath(net.dir) : '');
+ipcMain.handle('sync:user', async (e, name) => { net.user = String(name || '').trim().slice(0, 40); netSave(); if (sync) sync.user = net.user || os.userInfo().username; return syncInfo(); });
+ipcMain.on('sync:current', (e, id, name) => { if (sync) { sync.current = id; sync.currentName = name; } });
+ipcMain.handle('sync:readConflict', async (e, file) => { const d = readJSON(file, null); return d && d.project ? d.project : null; });
+ipcMain.handle('sync:now', async () => { if (sync) { if (lastState) sync.save(lastState); sync.poll(); sync.heartbeat(); } return syncInfo(); });
+
 /* ---------- dados e backups ---------- */
-ipcMain.on('state:load', (e) => { try { e.returnValue = fs.readFileSync(DATA_FILE(), 'utf8'); } catch (err) { e.returnValue = null; } });
+ipcMain.on('state:load', (e) => {
+  let text = null; try { text = fs.readFileSync(DATA_FILE(), 'utf8'); } catch (err) {}
+  if (net.dir) {
+    try { if (!sync) startSync(); const local = text ? JSON.parse(text) : null; const r = sync.load(local, net.synced || []); lastState = r.state; e.returnValue = JSON.stringify(r.state); return; } catch (err) { console.error('Falha ao ler a pasta compartilhada', err); }
+  }
+  e.returnValue = text;
+});
 ipcMain.on('state:save', (e, json) => {
   try {
+    if (sync) { try { const S = JSON.parse(json); lastState = S; sync.save(S); net.synced = sync.syncedIds(); } catch (err) { console.error('Falha ao sincronizar', err); } }
     writeAtomic(DATA_FILE(), json);
     const day = new Date().toISOString().slice(0, 10);
     writeAtomic(path.join(BACKUP_DIR(), `central-tecnica-${day}.json`), json);
@@ -186,4 +241,5 @@ app.whenReady().then(() => {
   setupUpdater();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
+app.on('before-quit', () => { stopSync(); netSave(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

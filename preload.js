@@ -10,5 +10,16 @@ contextBridge.exposeInMainWorld('ctDesktop', {
   checkUpdates: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   openDownloads: () => ipcRenderer.invoke('update:downloads'),
-  onMenu: (cb) => ipcRenderer.on('menu', (_e, cmd) => cb(cmd))
+  onMenu: (cb) => ipcRenderer.on('menu', (_e, cmd) => cb(cmd)),
+  sync: {
+    info: () => ipcRenderer.sendSync('sync:info'),
+    choose: () => ipcRenderer.invoke('sync:choose'),
+    disconnect: () => ipcRenderer.invoke('sync:disconnect'),
+    open: () => ipcRenderer.invoke('sync:open'),
+    setUser: (n) => ipcRenderer.invoke('sync:user', n),
+    current: (id, name) => ipcRenderer.send('sync:current', id, name),
+    readConflict: (f) => ipcRenderer.invoke('sync:readConflict', f),
+    now: () => ipcRenderer.invoke('sync:now'),
+    on: (cb) => ipcRenderer.on('sync', (_e, type, data) => cb(type, data))
+  }
 });

@@ -51,6 +51,16 @@ Lá aparecem:
 - **Mac:** o app avisa que tem versão nova e abre a página de downloads; a pessoa baixa o `.dmg` e substitui o app em Aplicativos. A instalação sozinha no Mac exige o certificado de desenvolvedor da Apple (US$ 99 por ano). Se um dia você fizer essa conta, dá para ligar.
 - Os projetos nunca se perdem na atualização.
 
+## 7. Pasta compartilhada (vários computadores)
+
+Para abrir os mesmos projetos em mais de um computador:
+
+1. Instale o Google Drive para computador (ou OneDrive/Dropbox) e crie uma pasta compartilhada, por exemplo `G:\Meu Drive\00_Central Técnica`.
+2. No app, abra **Ferramentas → Pasta compartilhada → Escolher pasta compartilhada…** e selecione a pasta.
+3. Repita no outro computador escolhendo a mesma pasta (no Mac o caminho do Drive é diferente, mas é a mesma pasta).
+
+Os projetos dos dois computadores são juntados; nada é apagado. Cada projeto vira um arquivo em `projetos/`, a biblioteca (racks, kits, modelos, cases, estoque e papel timbrado) fica em `biblioteca.json`. O topo do app mostra quem mais está online e no mesmo projeto. Se duas pessoas salvarem o mesmo projeto ao mesmo tempo, a versão de quem salvou por último vai para `conflitos/` e pode ser aberta como cópia. Projetos excluídos vão para `lixeira/`.
+
 ## 6. Onde ficam os dados
 
 - O app salva sozinho a cada alteração.

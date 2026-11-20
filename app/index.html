@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Central Técnica by Don · V46</title>
+<title>Central Técnica by Don · V47</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=JetBrains+Mono:wght@400;600;800&display=swap">
@@ -338,12 +338,16 @@ body.live .bar i{background:var(--tally)}
 .case footer{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
 .updbar{position:fixed;right:18px;bottom:18px;z-index:250;display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--phos);border-radius:var(--r1);padding:10px 12px 10px 16px;box-shadow:0 12px 40px rgba(0,0,0,.55);font-size:13.5px}
 .updbar b{color:var(--phos)}
+.netpill{gap:8px;font-size:12.5px;max-width:280px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.netpill i{width:8px;height:8px;border-radius:50%;background:var(--phos);flex:none;box-shadow:0 0 8px var(--phos)}
+.netpill.warn i{background:var(--amber);box-shadow:0 0 8px var(--amber)}.netpill.warn{color:var(--amber)}
+.netpill.bad i{background:var(--tally);box-shadow:none}.netpill.bad{color:var(--tally)}
 </style>
 </head>
 <body>
 <div class="app">
   <header class="master">
-    <div class="brand" id="brandBtn" title="Versão e atualizações" style="cursor:pointer"><span class="lamp" aria-hidden="true"></span><div><b>CENTRAL TÉCNICA</b><small id="brandVer">by Don · V46</small></div></div>
+    <div class="brand" id="brandBtn" title="Versão e atualizações" style="cursor:pointer"><span class="lamp" aria-hidden="true"></span><div><b>CENTRAL TÉCNICA</b><small id="brandVer">by Don · V47</small></div></div>
     <div class="projsel">
       <select id="projSel" aria-label="Projeto atual"></select>
       <button class="iconbtn" id="newProj" title="Novo projeto">+ Projeto</button>
@@ -351,6 +355,7 @@ body.live .bar i{background:var(--tally)}
     <button class="iconbtn" id="palBtn" title="Busca rápida">Buscar <kbd>Ctrl K</kbd></button>
     <div class="undo"><button class="iconbtn" id="undoBtn" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg></button><button class="iconbtn" id="redoBtn" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/></svg></button></div>
     <button class="iconbtn" id="helpBtn" title="Tour rápido pelas telas" aria-label="Ajuda">?</button>
+    <button class="iconbtn netpill" id="netPill" hidden></button>
     <div class="spacer"></div>
     <div class="countdown" id="countdown"></div>
     <div class="clock" id="clock" aria-label="Horário com quadros">00:00:00<i>:00</i></div>
@@ -581,6 +586,7 @@ const I={
  atem:'<rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h2M10 11h2M14 11h2M17 13v2"/>',
  vhub:'<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M7 9h.01M10 9h.01M13 9h.01M16 9h.01M7 15h10"/>',
  order:'<path d="M9 5h10M9 12h10M9 19h10"/><path d="M4 4l1 1 2-2M4 11l1 1 2-2M4 18l1 1 2-2"/>',
+ cloud:'<path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.5 4.25 4.25 0 0 0 7 18z"/>',
  labels:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
  wizard:'<path d="M4 20L14 10M15 4v3M18.5 5.5l-2 2M20 9h-3M12 6.5l-2-2"/><path d="M14 10l1.5 1.5"/>',
  box:'<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
@@ -598,7 +604,7 @@ const VIEWS=[
  ['Espaço físico',[['floor','Planta e câmeras','floor'],['house','House e bancadas','house'],['cable','Passagem de cabos','cable']]],
  ['Cálculos',[['power','Energia · kVA','power'],['rec','Gravação e mídias','rec'],['order','Lista de pedido','order']]],
  ['Logística',[['sep','Separação e retorno','check'],['inv','Estoque do depósito','box'],['labels','Etiquetas','labels']]],
- ['Ferramentas',[['bars','Sinal de teste','bars'],['report','Relatório para impressão','report'],['backup','Backup, modelos e versões','backup']]]
+ ['Ferramentas',[['bars','Sinal de teste','bars'],['report','Relatório para impressão','report'],['rede','Pasta compartilhada','cloud'],['backup','Backup, modelos e versões','backup']]]
 ];
 let view=(location.hash||'#dash').slice(1);
 function renderRail(){
@@ -2241,6 +2247,65 @@ function bindCases(p,rer){
 }
 function casesReportHTML(p){const cs=(p.cases||[]).filter(c=>c.items.length);
   return `<div class="cslist">${cs.map(c=>`<div class="csblk"><h4>${esc(c.name)}</h4>${c.items.map(i=>`<div class="csit"><span class="box"></span><b class="num">${fmtQ(i.qty)}</b> ${esc(i.name)}</div>`).join('')}</div>`).join('')}</div>`}
+
+/* =========================================================
+   V47 — pasta compartilhada: mesmos projetos em vários computadores
+   ========================================================= */
+const NET=DESK&&DESK.sync?DESK.sync:null;
+const LIBK=['templates','kits','racks','caseLib','inv','brand'];
+let netInfo=NET?NET.info():null,netPeers=[],netLast=null,netQueue=[];
+function netPill(){const el=$('#netPill');if(!el)return;
+  if(!netInfo||!netInfo.enabled){el.hidden=true;return}el.hidden=false;
+  const here=netPeers.filter(x=>x.project===S.current);
+  el.className='iconbtn netpill '+(!netInfo.ok?'bad':here.length?'warn':'');
+  el.innerHTML=`<i></i>${!netInfo.ok?'Sem acesso à pasta':here.length?`${esc(here.map(x=>x.user||x.machine).join(', '))} neste projeto`:netPeers.length?`Sincronizado · ${netPeers.length+1} online`:'Sincronizado'}`;
+  el.title=!netInfo.ok?`Não consegui acessar ${netInfo.dir}. As alterações ficam salvas neste computador e vão para a pasta quando ela voltar.`:`Pasta compartilhada: ${netInfo.dir}${netPeers.length?'\nOnline: '+netPeers.map(x=>`${x.user||x.machine} (${x.machine})${x.projectName?' · '+x.projectName:''}`).join('\n'):''}`;
+}
+function netApply(fn){if(isTyping()){netQueue.push(fn);return}fn()}
+document.addEventListener('focusout',()=>setTimeout(()=>{if(!isTyping()&&netQueue.length){const q=netQueue.splice(0);q.forEach(f=>f())}},50));
+function netFill(np){const d=newProject(np.name||'Projeto');Object.keys(d).forEach(k=>{if(np[k]==null)np[k]=d[k]});normalize(np);return np}
+function netReplaceProject(np){netFill(np);const i=S.projects.findIndex(x=>x.id===np.id);if(i>=0)S.projects[i]=np;else S.projects.push(np);if(np.id===S.current)histReset()}
+if(NET){
+  NET.on((type,d)=>{
+    if(type==='status'){netInfo={...netInfo,ok:d.ok,error:d.error};netLast=d.at;netPill();return}
+    if(type==='presence'){netPeers=d||[];netPill();return}
+    if(type==='reload'){S=d;S.projects.forEach(netFill);S.templates=S.templates||[];S.racks=S.racks||[];if(!S.projects.some(p=>p.id===S.current))S.current=S.projects[0].id;histReset();netInfo=NET.info();render();netPill();toast('Conectado à pasta compartilhada');return}
+    if(type==='project')return netApply(()=>{const isCur=d.project.id===S.current;netReplaceProject(d.project);render();toast(`${isCur?'Este projeto':'“'+d.project.name+'”'} foi ${d.isNew?'adicionado':'atualizado'} por ${d.meta.user||d.meta.by}`)});
+    if(type==='removed')return netApply(()=>{const p=S.projects.find(x=>x.id===d.id);if(!p)return;if(S.projects.length<2){toast(`“${p.name}” foi excluído em outro computador.`);return}S.projects=S.projects.filter(x=>x!==p);if(S.current===p.id){S.current=S.projects[0].id;histReset()}render();toast(`“${p.name}” foi excluído em outro computador`)});
+    if(type==='lib')return netApply(()=>{LIBK.forEach(k=>{if(k in d.lib)S[k]=d.lib[k]});if(['racks','kits','models','inv','report','gear','labels'].includes(view))render()});
+    if(type==='conflict')return netApply(()=>{netReplaceProject(d.project);render();
+      $('#modal').innerHTML=`<h3>Alterações ao mesmo tempo</h3><p class="sub" style="margin:0 0 12px">${esc(d.by)} salvou “${esc(d.name)}” enquanto você também editava. Para não perder nada, ficou valendo a versão da pasta compartilhada e as suas últimas alterações foram guardadas numa cópia.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="cfOk">Entendi</button><button class="btn go" id="cfOpen">Abrir a minha versão como cópia</button></div>`;
+      $('#modalBg').classList.add('open');const close=()=>$('#modalBg').classList.remove('open');$('#cfOk').onclick=close;
+      $('#cfOpen').onclick=async()=>{const p=await NET.readConflict(d.file);close();if(!p){toast('Não encontrei a cópia.');return}p.id=uid();p.name=p.name+' (minha versão)';netFill(p);S.projects.push(p);S.current=p.id;save();histReset();render();toast('Sua versão foi aberta como um projeto separado')}});
+  });
+  let lastCur=null;setInterval(()=>{const p=cur();const k=p.id+'|'+p.name;if(k!==lastCur){lastCur=k;NET.current(p.id,p.name);netPill()}},1500);
+}
+R.rede=()=>{
+  const I=NET?NET.info():null;netInfo=I||netInfo;
+  $('#view').innerHTML=`<div class="vhead"><div><h1>Pasta compartilhada</h1><p>Use uma pasta do Google Drive, OneDrive, Dropbox ou da rede para abrir os mesmos projetos em vários computadores. Cada computador continua salvando também localmente e funciona sem internet; as alterações vão para a pasta assim que ela estiver acessível.</p></div></div>
+  ${!NET?`<div class="panel"><h3>Disponível no aplicativo instalado</h3><p class="sub" style="margin:6px 0 0">A versão de navegador não consegue gravar em pastas do computador. Instale o app para Windows ou Mac pela <a href="https://github.com/DINFILMSS/CENTRAL-TECNICA-v2/releases/latest" target="_blank" rel="noopener" style="color:var(--phos)">página de downloads</a>.</p></div>`
+  :`<div class="grid g2"><div class="panel"><h3>${I.enabled?'Conectado':'Não conectado'}</h3>
+    ${I.enabled?`<p class="sub" style="margin:6px 0 10px;word-break:break-all"><b style="color:var(--text)">${esc(I.dir)}</b></p><p style="margin:0 0 12px;font-size:13.5px">${I.ok?'<span style="color:var(--phos)">● Pasta acessível</span>':`<span style="color:var(--tally)">● Sem acesso agora</span> <span class="note">${esc(I.error||'')}</span>`}</p>
+     <div class="row"><button class="btn" id="nwOpen">Abrir pasta</button><button class="btn" id="nwNow">Sincronizar agora</button><button class="btn" id="nwChoose">Trocar pasta…</button><button class="btn danger" id="nwOff">Desconectar</button></div>`
+    :`<p class="sub" style="margin:6px 0 12px">Escolha a pasta compartilhada — por exemplo <b style="color:var(--text)">G:\\Meu Drive\\00_Central Técnica</b>. Os projetos deste computador são juntados aos que já estiverem lá; nada é apagado.</p><button class="btn go" id="nwChoose">Escolher pasta compartilhada…</button>`}
+    <label class="f" style="margin-top:16px"><span>Seu nome (aparece para os outros computadores)</span><input class="in" id="nwUser" value="${esc(I.user)}" style="max-width:280px"></label>
+    <p class="note">Este computador: ${esc(I.machine)}</p></div>
+   <div class="panel"><h3>Online agora</h3>${I.enabled&&netPeers.length?`<ul class="checks" style="margin-top:8px">${netPeers.map(x=>`<li><span class="dot" style="background:var(--phos)"></span><b>${esc(x.user||x.machine)}</b>&nbsp;<span style="color:var(--mute)">${esc(x.machine)}${x.projectName?' · '+esc(x.projectName):''}</span></li>`).join('')}</ul>`:`<p class="note" style="margin-top:8px">${I.enabled?'Nenhum outro computador com o app aberto nesta pasta.':'Conecte a pasta para ver quem está usando.'}</p>`}
+    <h3 style="margin-top:18px">Como funciona</h3><ul style="margin:8px 0 0;padding-left:18px;color:var(--soft);font-size:13px;line-height:1.6">
+     <li>Cada projeto vira um arquivo na pasta; racks, kits, modelos, cases, estoque e papel timbrado ficam em <i>biblioteca.json</i>.</li>
+     <li>As mudanças de outro computador chegam sozinhas em poucos segundos depois que o Drive sincroniza.</li>
+     <li>No topo aparece quem mais está com o mesmo projeto aberto. Se dois salvarem ao mesmo tempo, nada se perde: a sua versão vai para a pasta <i>conflitos</i> e você pode abri-la como cópia.</li>
+     <li>Projetos excluídos vão para a pasta <i>lixeira</i>.</li>
+     <li>No Google Drive para computador, marque a pasta como <b>Disponível off-line</b> para abrir mais rápido.</li></ul></div></div>`}`;
+  if(!NET)return;
+  const after=i=>{netInfo=i;R.rede();netPill()};
+  $('#nwChoose').onclick=async()=>after(await NET.choose());
+  $('#nwOff')&&($('#nwOff').onclick=()=>confirmBox('Desconectar da pasta compartilhada? Os projetos continuam neste computador, mas param de sincronizar.','Desconectar',async()=>after(await NET.disconnect())));
+  $('#nwOpen')&&($('#nwOpen').onclick=()=>NET.open());
+  $('#nwNow')&&($('#nwNow').onclick=async()=>{after(await NET.now());toast('Sincronizado')});
+  $('#nwUser').onchange=async e=>after(await NET.setUser(e.target.value));
+};
 
 /* ---------- sugestão de metragem ---------- */
 const STD_LEN={SDI:[0.5,1,2,3,5,10,15,20,25,30,40,50,75,100],Fibra:[25,50,100,150,200,300,500],HDMI:[0.5,1,2,3,5,10,15],Rede:[0.5,1,2,3,5,10,15,20,30,50,75,100],'Áudio':[1,2,3,5,10,15,20,30,50,100],REF:[1,2,3,5,10,15,20,30,50,100]};
@@ -3948,7 +4013,7 @@ function updBar(v){let b=$('#updBar');if(!b){b=document.createElement('div');b.i
   $('#updGo').onclick=()=>{try{DESK.installUpdate()}catch(e){}};$('#updX').onclick=()=>b.remove()}
 function aboutBox(){
   const canUpd=!!(DESK&&DESK.checkUpdates);
-  $('#modal').innerHTML=`<h3>Central Técnica by Don</h3><p class="sub" style="margin:0 0 14px">${APPV?`Aplicativo instalado · versão <b>${esc(APPV)}</b>`:'Versão de navegador · V46'}</p>
+  $('#modal').innerHTML=`<h3>Central Técnica by Don</h3><p class="sub" style="margin:0 0 14px">${APPV?`Aplicativo instalado · versão <b>${esc(APPV)}</b>`:'Versão de navegador · V47'}</p>
   ${canUpd?`<p style="font-size:13.5px;color:var(--soft);margin:0 0 14px">O app procura versão nova sozinho ao abrir e a cada 4 horas. No Windows ela é baixada e instalada ao reiniciar; no Mac abre a página de download.</p><div class="row" style="justify-content:space-between"><button class="btn" id="abDl">Página de downloads</button><span class="row"><button class="btn ghost" id="abC">Fechar</button><button class="btn go" id="abUp">Procurar atualizações agora</button></span></div>`
   :`<p style="font-size:13.5px;color:var(--soft);margin:0 0 14px">${DESK?'Esta instalação é anterior à atualização automática. Baixe a versão mais nova na página de downloads e instale por cima — os projetos continuam salvos.':'Esta é a versão de navegador: ela sempre abre na versão mais recente.'}</p><div class="row" style="justify-content:flex-end"><button class="btn ghost" id="abC">Fechar</button></div>`}`;
   $('#modalBg').classList.add('open');const close=()=>$('#modalBg').classList.remove('open');$('#abC').onclick=close;
@@ -3956,6 +4021,7 @@ function aboutBox(){
   if($('#abDl'))$('#abDl').onclick=()=>{close();DESK.openDownloads()};
 }
 $('#brandBtn').onclick=aboutBox;
+$('#netPill').onclick=()=>go('rede');setTimeout(netPill,0);
 
 render();requestAnimationFrame(tick);
 histReset();
