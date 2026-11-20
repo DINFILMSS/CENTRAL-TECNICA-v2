@@ -1303,6 +1303,8 @@ R.report=()=>{
   <div class="acts">${DESK?'<button class="btn" id="rpPrint">Imprimir</button><button class="btn go" id="rpPdf">Salvar PDF</button>':'<button class="btn go" id="rpPrint">Imprimir / salvar PDF</button>'}</div></div>
   <div class="grid side-l" style="grid-template-columns:300px 1fr">
    <div class="panel" style="position:sticky;top:0">
+    <h3>Estilo do PDF</h3>
+    <div class="seg" id="rpMode" style="margin:10px 0 18px"><button data-m="print" class="${rpOpts.dark?'':'on'}">Impressão</button><button data-m="dark" class="${rpOpts.dark?'on':''}">Escuro</button></div>
     <h3>Seções</h3>
     <div style="margin:10px 0 14px">${RP_SECTIONS.map(([k,l])=>`<label class="row" style="gap:8px;font-size:13px;padding:3px 0"><input type="checkbox" data-rp="${k}" ${rpOpts.on.has(k)?'checked':''}> ${l}</label>`).join('')}</div>
     <label class="row" style="gap:8px;font-size:13px;padding:3px 0"><input type="checkbox" id="rpCover" ${rpOpts.cover?'checked':''}> Capa e sumário</label>
@@ -1317,11 +1319,12 @@ R.report=()=>{
   const upd=()=>{$('.doc-preview .doc').innerHTML=buildReport(p)};
   const lhRe=()=>{$('#lhBox').innerHTML=lhPanelHTML();lhBind(lhRe);upd()};lhBind(lhRe);
   $$('[data-rp]').forEach(i=>i.onchange=()=>{i.checked?rpOpts.on.add(i.dataset.rp):rpOpts.on.delete(i.dataset.rp);upd()});
+  $$('#rpMode button').forEach(b=>b.onclick=()=>{rpOpts.dark=b.dataset.m==='dark';$$('#rpMode button').forEach(x=>x.classList.toggle('on',x===b));upd();toast(rpOpts.dark?'PDF escuro: ideal para ler na tela, tablet ou celular'+(lhOn()?'. O papel timbrado só vale no modo Impressão.':''):'PDF de impressão')});
   $('#rpCover').onchange=e=>{rpOpts.cover=e.target.checked;upd()};
   $('#rpSign').onchange=e=>{rpOpts.sign=e.target.checked;upd()};
   $('#rpResp').oninput=e=>{rpOpts.resp=e.target.value;upd()};
   $('#rpRev').oninput=e=>{rpOpts.rev=e.target.value;upd()};
-  if($('#rpPdf'))$('#rpPdf').onclick=()=>deskPDF(`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`,`${slug(p.name)}-caderno-tecnico.pdf`);
+  if($('#rpPdf'))$('#rpPdf').onclick=()=>deskPDF(`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`,`${slug(p.name)}-caderno-tecnico${rpOpts.dark?'-escuro':''}.pdf`);
   $('#rpPrint').onclick=()=>{$('#report').innerHTML=`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`;setTimeout(()=>{try{window.print()}catch(e){toast('Impressão indisponível aqui. Abra o arquivo HTML local.')}},60)};
 };
 const DOC_CSS=`.cslist{columns:2;column-gap:12mm}.csblk{break-inside:avoid;margin:0 0 6mm}.csblk h4{font:700 11pt Archivo,Arial,sans-serif;margin:0 0 2mm;padding-bottom:1mm;border-bottom:1pt solid var(--acc)}.csit{font-size:10pt;line-height:1.5}.csit .num{font-weight:700;margin-right:2pt}
@@ -1432,10 +1435,10 @@ function buildReport(p){
   if(on.has('crew'))s+=sec('crew','Equipe e intercom',tb(['Nome','Função','Intercom','Rádio','Telefone'],[...p.crew].sort((a,b)=>String(a.ic).localeCompare(String(b.ic))).map(c=>[H(`<b>${esc(c.name)}</b>`),c.role,c.ic,c.radio,c.phone])),brk());
   if(on.has('rundown')){const sd=(p.days||[]).length?showDays(p):[null];const one=(d)=>{const l=d?rdList(p,d.id):p.rundown,st=d?rdStart(p,d.id):dt,tot=l.reduce((x,b)=>x+(+b.dur||0),0);let a=0;return (sd.length>1&&d?`<h3>${esc(d.type)} · ${esc(dayName(d))}${d.label?' · '+esc(d.label):''}</h3>`:'')+tb(['#','Entrada','Tipo','Bloco','Fonte','Duração','Observações'],l.map((b,i)=>{const t=a;a+=+b.dur||0;return [String(i+1).padStart(2,'0'),st?new Date(st.getTime()+t*1000).toLocaleTimeString('pt-BR'):mmss(t),b.type,H(`<b>${esc(b.title)}</b>`),b.cam,mmss(b.dur),b.notes]}),['num','num','','','','num r',''])+`<p class="note">Duração ${mmss(tot)}${st?' · término previsto '+new Date(st.getTime()+tot*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):''}.</p>`};s+=sec('rundown','Espelho do programa',sd.map(one).join(''),brk())}
   if(on.has('gear')){const cats=[...new Set(p.gear.map(g=>g.cat))];s+=sec('gear','Equipamentos',cats.map(c=>`<h3>${esc(c)}</h3>`+tb(['Nome','Modelo','Rack','Entradas','Saídas','W máx.','Origem W','Status'],p.gear.filter(g=>g.cat===c).map(g=>[H(`<b>${esc(g.name)}</b>`),g.model,((p.racks||[]).find(r=>r.id===g.rack)||{}).name||'—',g.ins.length,g.outs.length,g.watts,(WSRC[g.wsrc]||['—'])[0],{ok:'Conferido',pend:'A conferir',res:'Reserva'}[g.status]]),['','','','num r','num r','num r','',''])).join('')+((p.racks||[]).length?`<h3>Racks</h3>`+tb(['Rack','Altura','Equipamentos','W máx.'],p.racks.map(r=>{const gs=p.gear.filter(g=>g.rack===r.id);return [H(`<b>${esc(r.name)}</b>`),r.u+'U',gs.map(g=>g.name).join(', '),fmt(gs.reduce((a,g)=>a+(+g.watts||0),0),0)]}),['','num','','num r'])+(p.racks.some(r=>r.items)?`<div class="rkgrid">${p.racks.filter(r=>r.items).map(r=>`<figure>${rackSVG({u:r.u,items:r.items.filter(it=>it.acc||p.gear.some(g=>g.id===it.gid)).map(it=>({...it,name:it.acc?it.name:(gearById(it.gid)||{}).name}))})}<figcaption><b>${esc(r.name)}</b> · ${r.u}U</figcaption></figure>`).join('')}</div>`:''):''),brk())}
-  if(on.has('patch')){const li=linkIssues(p);s+=sec('patch','Patch de sinais',`<div class="fig">${patchSVGPrint(p)}</div><p class="cap">Diagrama de blocos com a posição usada no app. Cores: ${SIGS.map(t=>`<span style="color:${PSIG[t]}">■</span> ${t}`).join(' · ')}.</p>`+tb(['Cabo','Origem','Saída','Destino','Entrada','Tipo','m'],p.links.map(l=>{const a=gearById(l.a),b=gearById(l.b);return [H(`<span class="num">${esc(l.label||'—')}</span>`),a?.name,a?.outs.find(x=>x.id===l.ap)?.name,b?.name,b?.ins.find(x=>x.id===l.bp)?.name,H(`<span class="tag" style="color:${PSIG[l.type]}">${l.type}</span>`),l.len]}),['','','','','','','num r'])+(li.length?`<h3>Atenção</h3>${li.map(i=>`<div class="issue"><i style="background:#d98a00"></i>${esc(i.msg)}</div>`).join('')}`:''),true)}
+  if(on.has('patch')){const li=linkIssues(p);s+=sec('patch','Patch de sinais',`<div class="fig fig-patch">${patchSVGPrint(p)}</div><p class="cap">Diagrama de blocos com a posição usada no app. Cores: ${SIGS.map(t=>`<span style="color:${PSIG[t]}">■</span> ${t}`).join(' · ')}.</p>`+tb(['Cabo','Origem','Saída','Destino','Entrada','Tipo','m'],p.links.map(l=>{const a=gearById(l.a),b=gearById(l.b);return [H(`<span class="num">${esc(l.label||'—')}</span>`),a?.name,a?.outs.find(x=>x.id===l.ap)?.name,b?.name,b?.ins.find(x=>x.id===l.bp)?.name,H(`<span class="tag" style="color:${PSIG[l.type]}">${l.type}</span>`),l.len]}),['','','','','','','num r'])+(li.length?`<h3>Atenção</h3>${li.map(i=>`<div class="issue"><i style="background:#d98a00"></i>${esc(i.msg)}</div>`).join('')}`:''),true)}
   if(on.has('mv'))s+=sec('mv',p.mv.name||'Multiview',`<div class="fig">${mvSVGPrint(p)}</div><p class="cap">Borda vermelha = PGM, verde = PVW. No layout 2 + 8 o PGM fica sempre à direita. Layout de planejamento.</p>`,brk());
   if(on.has('floor'))s+=sec('floor','Planta e câmeras',`<div class="fig">${floorSVG(p,{print:true})}</div>`+tb(['Câmera','Equipamento','Focal','Sensor','Ângulo H','Direção','Alcance'],p.floor.items.filter(i=>i.kind==='cam').map(c=>[H(`<b>${esc(c.name)}</b>`),gearById(c.gearId)?.model||'—',c.focal+' mm',c.sensor+' mm',fmt(fovOf(c),1)+'°',Math.round((c.angle%360+360)%360)+'°',meters(c.reach,p.floor.scale)]),['','','num r','num r','num r','num r','num r'])+`<p class="note">${p.floor.scale?'Escala calibrada: 1 px = '+fmt(p.floor.scale,3)+' m.':'Planta sem escala calibrada — distâncias em pixels.'} Abertura calculada pela focal e largura do sensor; confira com a lente real.</p>`,true);
-  if(on.has('house'))s+=sec('house','House e bancadas',`<div class="fig">${houseSVG(p,null,true)}</div>`+tb(['Bancada','Largura','Profundidade','Itens sobre a bancada'],p.house.benches.map(b=>[H(`<b>${esc(b.name)}</b>`),fmt(b.w,2)+' m',fmt(b.d,2)+' m',p.house.items.filter(i=>i.bench===b.id).map(i=>i.label).join(', ')]),['','num r','num r','']),true);
+  if(on.has('house'))s+=sec('house','House e bancadas',`<div class="fig fig-patch">${houseSVG(p,null,true)}</div>`+tb(['Bancada','Largura','Profundidade','Itens sobre a bancada'],p.house.benches.map(b=>[H(`<b>${esc(b.name)}</b>`),fmt(b.w,2)+' m',fmt(b.d,2)+' m',p.house.items.filter(i=>i.bench===b.id).map(i=>i.label).join(', ')]),['','num r','num r','']),true);
   if(secs.some(x=>x[0]==='cable'))s+=sec('cable','Passagem de cabos',`<div class="fig">${floorSVG(p,{print:true,cables:true})}</div>`+tb(['Rota','Tipo','Metragem','Com folga 10%'],p.cables.routes.map(r=>{const m=r.len?+r.len:routeLen(r,p.floor.scale).m;return [H(`<b>${esc(r.name)}</b>`),r.type,m?fmt(m,1)+' m':'—',m?fmt(m*1.1,1)+' m':'—']}),['','','num r','num r']),true);
   if(on.has('power')){const c=p.power;s+=sec('power','Energia',`<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div><span>Potência máx. somada</span><b>${fmt(pw.W,0)} W</b></div><div><span>Com reserva ${c.res}%</span><b>${fmt(pw.Wr,0)} W</b></div><div><span>Potência aparente</span><b>${fmt(pw.kva,2)} kVA</b></div><div><span>Corrente ${c.phase==='tri'?'por fase':''}</span><b>${fmt(pw.I,1)} A</b></div></div>`+tb(['Equipamento','Modelo','W máx.','Origem do valor'],[...p.gear].sort((a,b)=>(+b.watts||0)-(+a.watts||0)).map(g=>[H(`<b>${esc(g.name)}</b>`),g.model,g.watts,(WSRC[g.wsrc]||['—'])[0]+(g.wsrc!=='manual'&&powerOf(g.model,g.cat).note?' — '+powerOf(g.model,g.cat).note:'')]),['','','num r',''])+`<p class="note">${c.v} V ${c.phase==='tri'?'trifásico equilibrado':'monofásico'} · FP ${fmt(c.fp,2)} · kVA = W ÷ (1000 × FP)${c.phase==='tri'?' · I = VA ÷ (√3 × V)':' · I = VA ÷ V'}. ${pw.fab} valor(es) do fabricante, ${pw.aprox} aproximado(s), ${pw.man} informado(s). Valores máximos de ficha técnica; não substitui o projeto elétrico de um profissional habilitado.</p>`,true)}
   if(on.has('order')){const d=orderData(p);s+=sec('order','Lista de pedido',`<div class="two"><div><h3>Equipamentos</h3>${tb(['Modelo','Qtd'],Object.entries(d.byModel).sort((a,b)=>a[1].cat.localeCompare(b[1].cat)).map(([m,x])=>[m,x.n]),['','num r'])}</div><div><h3>Cabos (reserva ${p.orderSpare??10}%)</h3>${tb(['Tipo','Lances','Separar','Metragem'],Object.entries(d.cab).map(([t,c])=>[t,c.n,Math.ceil(c.n*d.sp),c.m?fmt(c.m*d.sp,0)+' m':'—']),['','num r','num r','num r'])}${Object.keys(d.conv).length?`<h3>Conversores</h3>${tb(['Item','Qtd'],Object.entries(d.conv),['','num r'])}`:''}${d.extras.length?`<h3>Acessórios</h3>${tb(['Item','Qtd'],d.extras.map(e=>[e.name,e.qty]),['','num r'])}`:''}<h3>Conferência no depósito</h3>${Object.keys(d.byModel).slice(0,0).join('')}<div class="lines"><div></div><div></div><div></div></div></div></div>`,brk())}
@@ -1444,7 +1447,7 @@ function buildReport(p){
   if(secs.some(x=>x[0]==='cases')&&(p.cases||[]).some(c=>c.items.length))s+=sec('cases','Cases e itens',casesReportHTML(p),brk());
   if(secs.some(x=>x[0]==='sep')&&sepItems(p).length)s+=sec('sep','Separação de equipamentos',sepReportHTML(p,tb,H),brk());
   if(o.sign)s+=`<section class="pb"><h2 class="sec"><b>—</b>Observações e assinaturas</h2>${p.notes?`<h3>Observações do evento</h3><div class="notes">${esc(p.notes)}</div>`:''}${(p.days||[]).some(d=>d.label)?`<h3>Observações por dia</h3>`+tb(['Dia','Tipo','Observação'],p.days.filter(d=>d.label).map(d=>[parseYMD(d.date).toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}),d.type,d.label])):''}<h3>Anotações em campo</h3><div class="lines">${'<div></div>'.repeat(p.notes?4:7)}</div><div class="sign" ${p.td?'style="grid-template-columns:repeat(4,1fr);gap:7mm"':''}>${p.td?`<div>${esc(p.td)}<span>Diretor técnico</span></div>`:''}<div>${esc(o.resp||'')}<span>Responsável técnico</span></div><div><span>Produção</span></div><div>${esc(p.client||'')}<span>Cliente</span></div></div><p class="note" style="margin-top:12mm">Gerado pela Central Técnica by Don em ${new Date().toLocaleString('pt-BR')}. Documento sujeito a alterações.</p></section>`;
-  {const B=lhOn();if(B)s=lhWrap(B,s)}
+  {const B=lhOn();if(o.dark)s=darkWrap(s);else if(B)s=lhWrap(B,s)}
   return s;
 }
 
@@ -2121,6 +2124,35 @@ async function accentOf(url){try{const img=await new Promise((r,j)=>{const i=new
   const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];if(!top||top[1]<20)return null;const [r,g,b]=top[0].split(',').map(v=>(+v<<4)+8);
   const L=(r*299+g*587+b*114)/1000;const k=L>150?150/L:1;return '#'+[r,g,b].map(v=>Math.round(v*k).toString(16).padStart(2,'0')).join('')}catch(e){return null}}
 
+
+/* ---------- PDF em modo escuro ---------- */
+function darkWrap(inner){
+  return `<style>.doc:has(.dk-wrap){--ink:#e6f0ea;--soft:#93a89c;--rule:#26362e;--acc:#2eff7e;background:#0b100d;color:var(--ink)}
+.dk-wrap th{background:#16211b;border-bottom-color:#3a4f44;color:#cfe0d6}
+.dk-wrap td{border-bottom-color:var(--rule)}
+.dk-wrap .fig{border-color:#2b3d33;background:#0b100d}
+.dk-wrap .fig-patch svg{filter:invert(.92) hue-rotate(180deg) saturate(1.3)}
+.dk-wrap .cover .band{background:#000;border:1pt solid #1f2c25}
+.dk-wrap .cover h1{color:#fff}
+.dk-wrap .disc{border-color:#3a4f44;background:#101712}
+.dk-wrap .notes{background:#121a15}
+.dk-wrap .septb tr.grp td{background:#16211b}
+.dk-wrap .lines div{border-bottom-color:#3a4f44}
+.dk-wrap .toc div{border-bottom-color:#3a4f44}
+.dk-wrap .kpis{border-color:#3a4f44}
+.dk-wrap .tag{color:var(--acc)}
+.dk-wrap .box{border-color:#cfe0d6}
+.dk-wrap .sign div{border-top-color:#cfe0d6}
+.dk-wrap .csblk h4{border-bottom-color:var(--acc)}
+.dk-bg{display:none}
+@media print{
+  @page{size:A4;margin:0}
+  html,body{background:#0b100d!important}
+  .doc:has(.dk-wrap){padding:0!important}
+  .dk-bg{display:block;position:fixed;top:0;left:0;width:210mm;height:297mm;background:#0b100d;z-index:-2}
+  .dk-wrap{padding:14mm 13mm 16mm;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+  .dk-wrap .cover{min-height:262mm}
+}</style><div class="dk-bg"></div><div class="dk-wrap">${inner}</div>`}
 /* ---------- papel timbrado ---------- */
 const lhOn=()=>S.brand&&S.brand.on&&S.brand.first?S.brand:null;
 function lhWrap(B,inner){const [t,r,b,l]=B.m.map(v=>Math.max(0,+v||0));
