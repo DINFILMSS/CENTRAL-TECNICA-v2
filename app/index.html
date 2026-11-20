@@ -329,6 +329,13 @@ body.live .bar i{background:var(--tally)}
 .wel button:hover,.wel button:focus-visible{border-color:var(--phos);outline:none}
 .wel b{font-size:15px}.wel span{color:var(--soft);font-size:12.5px;line-height:1.4}
 @media(max-width:700px){.wel{grid-template-columns:1fr}}
+.cases{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:14px}
+.case{border:1px solid var(--line);border-radius:var(--r1);background:var(--raise);padding:10px;display:flex;flex-direction:column;gap:6px}
+.case header{display:flex;gap:8px;align-items:center}.case header input{font-weight:700;font-size:14px}
+.case .ci{display:flex;flex-direction:column;gap:4px;max-height:300px;overflow:auto}
+.case .ci .row{gap:4px;flex-wrap:nowrap}.case .ci input[data-if="qty"]{width:54px;text-align:center;padding:5px;flex:none}.case .ci input[data-if="name"]{flex:1;min-width:0;padding:5px 8px}
+.case .csAdd{border-style:dashed;padding:6px 8px;font-size:12.5px}
+.case footer{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
 </style>
 </head>
 <body>
@@ -726,7 +733,7 @@ R.gear=()=>{
   if(gearSel&&!gearById(gearSel))gearSel=null;
   const g=gearSel&&gearById(gearSel);
   $('#view').innerHTML=`
-  <div class="vhead"><div><h1>Equipamentos</h1><p>Escolha no catálogo para adicionar ao projeto. Portas vêm de um modelo sugerido por tipo — confira com o manual de cada equipamento.</p></div>
+  <div class="vhead"><div><h1>Equipamentos</h1><p>Escolha no catálogo para adicionar ao projeto. Portas vêm de um modelo sugerido por tipo — confira com o manual de cada equipamento. Itens sem patch, como cabos extras e energia, vão nos cases logo abaixo.</p></div>
   <div class="acts"><button class="btn" id="gRack">▣ Inserir rack</button><button class="btn" id="gCsv">Exportar lista CSV</button><button class="btn" id="gCustom">+ Equipamento fora do catálogo</button></div></div>
   <div class="grid side-l" style="grid-template-columns:290px 1fr ${g?'330px':''}">
     <div class="panel" style="padding:14px">
@@ -753,8 +760,9 @@ R.gear=()=>{
       </div>
       <p class="note">Renomear uma porta mantém as ligações. Remover uma porta remove os cabos ligados nela.</p>
     </div>`:''}
-  </div>`;
+  </div>${casesPanelHTML(p)}`;
   drawCatalog();
+  bindCases(p,()=>{const sc=[$('#view'),document.scrollingElement].map(e=>e&&e.scrollTop);R.gear();[$('#view'),document.scrollingElement].forEach((e,k)=>{if(e)e.scrollTop=sc[k]})});
   $('#catQ').oninput=e=>{catQ=e.target.value;drawCatalog()};
   $('#catN').onchange=e=>{catN=clamp(parseInt(e.target.value)||1,1,50);e.target.value=catN};
   $$('tbody tr[data-id]').forEach(tr=>{
@@ -1280,7 +1288,7 @@ R.bars=()=>{
 function beep(){try{sig.ac=sig.ac||new (window.AudioContext||window.webkitAudioContext)();const o=sig.ac.createOscillator(),g=sig.ac.createGain();o.frequency.value=1000;g.gain.value=0.126;o.connect(g).connect(sig.ac.destination);o.start();o.stop(sig.ac.currentTime+1/sig.fps*2)}catch(e){}}
 
 /* ---------- relatório (caderno técnico) ---------- */
-const RP_SECTIONS=[['sum','Resumo e pendências'],['crew','Equipe e intercom'],['rundown','Espelho do programa'],['gear','Equipamentos'],['patch','Patch de sinais'],['mv','Multiview'],['floor','Planta e câmeras'],['house','House e bancadas'],['cable','Passagem de cabos'],['power','Energia'],['order','Lista de pedido'],['audio','Áudio'],['check','Checklist técnico'],['sep','Separação de equipamentos']];
+const RP_SECTIONS=[['sum','Resumo e pendências'],['crew','Equipe e intercom'],['rundown','Espelho do programa'],['gear','Equipamentos'],['patch','Patch de sinais'],['mv','Multiview'],['floor','Planta e câmeras'],['house','House e bancadas'],['cable','Passagem de cabos'],['power','Energia'],['order','Lista de pedido'],['cases','Cases e itens'],['audio','Áudio'],['check','Checklist técnico'],['sep','Separação de equipamentos']];
 const PSIG={SDI:'#0a9d4a',HDMI:'#0a7fc0',Fibra:'#c98200',Rede:'#7655d0','Áudio':'#c93c84',REF:'#555'};
 let rpOpts=null;
 R.report=()=>{
@@ -1298,11 +1306,13 @@ R.report=()=>{
     <label class="row" style="gap:8px;font-size:13px;padding:3px 0 12px"><input type="checkbox" id="rpSign" ${rpOpts.sign?'checked':''}> Página de assinaturas</label>
     <label class="f"><span>Responsável técnico</span><input class="in" id="rpResp" value="${esc(rpOpts.resp)}"></label>
     <label class="f"><span>Revisão</span><input class="in" id="rpRev" value="${esc(rpOpts.rev)}" style="width:90px"></label>
-    <p class="note">Dica: na janela de impressão, escolha “Salvar como PDF”, papel A4 e ative “Gráficos de plano de fundo” para manter as cores das faixas.</p>
+    <p class="note">Dica: na janela de impressão, escolha “Salvar como PDF”, papel A4, margens “Nenhuma” e ative “Gráficos de plano de fundo” para manter as cores e o papel timbrado.</p>
+    <div id="lhBox">${lhPanelHTML()}</div>
    </div>
    <div class="doc-preview"><div class="doc">${buildReport(p)}</div></div>
   </div>`;
   const upd=()=>{$('.doc-preview .doc').innerHTML=buildReport(p)};
+  const lhRe=()=>{$('#lhBox').innerHTML=lhPanelHTML();lhBind(lhRe);upd()};lhBind(lhRe);
   $$('[data-rp]').forEach(i=>i.onchange=()=>{i.checked?rpOpts.on.add(i.dataset.rp):rpOpts.on.delete(i.dataset.rp);upd()});
   $('#rpCover').onchange=e=>{rpOpts.cover=e.target.checked;upd()};
   $('#rpSign').onchange=e=>{rpOpts.sign=e.target.checked;upd()};
@@ -1311,7 +1321,8 @@ R.report=()=>{
   if($('#rpPdf'))$('#rpPdf').onclick=()=>deskPDF(`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`,`${slug(p.name)}-caderno-tecnico.pdf`);
   $('#rpPrint').onclick=()=>{$('#report').innerHTML=`<style>${DOC_CSS}</style><div class="doc">${buildReport(p)}</div>`;setTimeout(()=>{try{window.print()}catch(e){toast('Impressão indisponível aqui. Abra o arquivo HTML local.')}},60)};
 };
-const DOC_CSS=`.septb{table-layout:fixed;width:100%}.septb tr.grp td{background:#eef2f0;font-weight:700;font-size:8.5pt;padding-top:5pt}.septb tr{break-inside:avoid}
+const DOC_CSS=`.cslist{columns:2;column-gap:12mm}.csblk{break-inside:avoid;margin:0 0 6mm}.csblk h4{font:700 11pt Archivo,Arial,sans-serif;margin:0 0 2mm;padding-bottom:1mm;border-bottom:1pt solid var(--acc)}.csit{font-size:10pt;line-height:1.5}.csit .num{font-weight:700;margin-right:2pt}
+.septb{table-layout:fixed;width:100%}.septb tr.grp td{background:#eef2f0;font-weight:700;font-size:8.5pt;padding-top:5pt}.septb tr{break-inside:avoid}
 .rkgrid{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}.rkgrid figure{width:240px;margin:0;break-inside:avoid}.rkgrid figcaption{font-size:11px;margin-top:4px}
 
 .doc{--ink:#111;--soft:#555;--rule:#d5d9d6;--acc:#0a8f45;background:#fff;color:var(--ink);font:400 10pt/1.45 Archivo,Arial,sans-serif;font-stretch:100%}
@@ -1343,7 +1354,7 @@ const DOC_CSS=`.septb{table-layout:fixed;width:100%}.septb tr.grp td{background:
 .doc .cover .band .brand{font:800 10pt Archivo,Arial,sans-serif;letter-spacing:.06em;white-space:nowrap}
 .doc .cover .band .brand i{display:inline-block;width:7pt;height:7pt;border-radius:50%;background:#2eff7e;margin-right:6pt}
 .doc .cover .band small{font:500 8.5pt 'JetBrains Mono',monospace;color:#9fb3a8}
-.doc .cover .kind{margin:18mm 0 4mm;font:600 10pt Archivo;color:var(--acc)}
+.doc .cover .kind{margin:18mm 0 4mm;font:600 10pt Archivo,Arial,sans-serif;color:var(--acc)}
 .doc .cover h1{font:900 46pt/.9 Archivo,Arial Narrow,sans-serif;font-stretch:62%;text-transform:uppercase;margin:0;max-width:16ch;word-break:break-word}
 .doc .cover .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8pt;margin:10mm 0 2mm;border-top:1pt solid var(--ink);padding-top:6pt}
 .doc .cover .meta span{display:block;font-size:7.5pt;color:var(--soft)}
@@ -1394,7 +1405,7 @@ function orderData(p){
   const sp=1+(p.orderSpare??10)/100;const byModel={};p.gear.forEach(g=>{(byModel[g.model]=byModel[g.model]||{n:0,cat:g.cat}).n++});
   const cab={};p.links.forEach(l=>{if(l.type==='RF')return;const c=cab[l.type]=cab[l.type]||{n:0,m:0,semM:0};c.n++;const m=parseFloat(String(l.len).replace(',','.'));if(m>0)c.m+=m;else c.semM++});
   const conv={};linkIssues(p).filter(i=>i.kind==='conv').forEach(i=>{const k=i.from==='HDMI'&&i.to==='SDI'?'Micro Converter HDMI to SDI 12G':i.from==='SDI'&&i.to==='HDMI'?'Micro Converter SDI to HDMI 12G':`Conversor ${i.from} → ${i.to}`;conv[k]=(conv[k]||0)+1});
-  return {sp,byModel,cab,conv,extras:(p.extras||[]).filter(e=>e.qty>0)};
+  return {sp,byModel,cab,conv,extras:(p.extras||[]).filter(e=>e.qty>0),cases:(p.cases||[]).filter(c=>c.items.length)};
 }
 function buildReport(p){
   const o=rpOpts||{on:new Set(RP_SECTIONS.map(s=>s[0])),cover:true,sign:true,rev:'1',resp:''};const on=o.on;
@@ -1427,8 +1438,10 @@ function buildReport(p){
   if(on.has('order')){const d=orderData(p);s+=sec('order','Lista de pedido',`<div class="two"><div><h3>Equipamentos</h3>${tb(['Modelo','Qtd'],Object.entries(d.byModel).sort((a,b)=>a[1].cat.localeCompare(b[1].cat)).map(([m,x])=>[m,x.n]),['','num r'])}</div><div><h3>Cabos (reserva ${p.orderSpare??10}%)</h3>${tb(['Tipo','Lances','Separar','Metragem'],Object.entries(d.cab).map(([t,c])=>[t,c.n,Math.ceil(c.n*d.sp),c.m?fmt(c.m*d.sp,0)+' m':'—']),['','num r','num r','num r'])}${Object.keys(d.conv).length?`<h3>Conversores</h3>${tb(['Item','Qtd'],Object.entries(d.conv),['','num r'])}`:''}${d.extras.length?`<h3>Acessórios</h3>${tb(['Item','Qtd'],d.extras.map(e=>[e.name,e.qty]),['','num r'])}`:''}<h3>Conferência no depósito</h3>${Object.keys(d.byModel).slice(0,0).join('')}<div class="lines"><div></div><div></div><div></div></div></div></div>`,brk())}
   if(secs.some(x=>x[0]==='audio')){const mi=p.audio.mx.ins.split(',').map(x=>x.trim()).filter(Boolean),mo=p.audio.mx.outs.split(',').map(x=>x.trim()).filter(Boolean);s+=sec('audio','Áudio',`<h3>Mapa de canais</h3>`+tb(['Canal','Nome','Fonte','Tipo','Stagebox','Destinos'],p.audio.ch.map((c,i)=>[String(i+1).padStart(2,'0'),H(`<b>${esc(c.name)}</b>`),c.src,c.type,c.box,c.dest]),['num'])+(Object.keys(p.audio.mx.x).length?`<h3>Matriz</h3>`+tb(['Entrada \\ Saída',...mo],mi.map((nm,r)=>[nm,...mo.map((_,c)=>p.audio.mx.x[r+':'+c]?'●':'')])):''),brk())}
   if(on.has('check')){const groups=[...new Set(p.check.map(c=>c.group))];s+=sec('check','Checklist técnico',`<div class="two">${groups.map(g=>`<div><h3>${esc(g)}</h3>${p.check.filter(c=>c.group===g).map(c=>`<div class="issue" style="gap:4pt"><span class="box">${c.done?'✓':''}</span>${esc(c.text)}</div>`).join('')}</div>`).join('')}</div>`,brk())}
+  if(secs.some(x=>x[0]==='cases')&&(p.cases||[]).some(c=>c.items.length))s+=sec('cases','Cases e itens',casesReportHTML(p),brk());
   if(secs.some(x=>x[0]==='sep')&&sepItems(p).length)s+=sec('sep','Separação de equipamentos',sepReportHTML(p,tb,H),brk());
   if(o.sign)s+=`<section class="pb"><h2 class="sec"><b>—</b>Observações e assinaturas</h2>${p.notes?`<h3>Observações do evento</h3><div class="notes">${esc(p.notes)}</div>`:''}${(p.days||[]).some(d=>d.label)?`<h3>Observações por dia</h3>`+tb(['Dia','Tipo','Observação'],p.days.filter(d=>d.label).map(d=>[parseYMD(d.date).toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}),d.type,d.label])):''}<h3>Anotações em campo</h3><div class="lines">${'<div></div>'.repeat(p.notes?4:7)}</div><div class="sign"><div>${esc(o.resp||'')}<span>Responsável técnico</span></div><div><span>Produção</span></div><div>${esc(p.client||'')}<span>Cliente</span></div></div><p class="note" style="margin-top:12mm">Gerado pela Central Técnica by Don em ${new Date().toLocaleString('pt-BR')}. Documento sujeito a alterações.</p></section>`;
+  {const B=lhOn();if(B)s=lhWrap(B,s)}
   return s;
 }
 
@@ -1491,7 +1504,7 @@ function importData(d){
    ========================================================= */
 function normalize(p){
   p.audio=p.audio||{ch:[],mx:{ins:'Mic 1,Mic 2,Mic 3,Mic 4,Playback L,Playback R,PGM L,PGM R',outs:'PA L,PA R,Retorno,Stream L,Stream R,Rec L,Rec R,Intercom',x:{}}};
-  p.snaps=p.snaps||[];p.extras=p.extras||[];p.camsheets=p.camsheets||{};p.vh=p.vh||{};p.atem=p.atem||{gear:'',xml:'',product:'',names:{}};p.comp=p.comp||{gear:'',cols:8,startRow:0,startCol:1,tplIn:1};
+  p.snaps=p.snaps||[];p.extras=p.extras||[];p.cases=p.cases||[];p.camsheets=p.camsheets||{};p.vh=p.vh||{};p.atem=p.atem||{gear:'',xml:'',product:'',names:{}};p.comp=p.comp||{gear:'',cols:8,startRow:0,startCol:1,tplIn:1};
   p.links.forEach(l=>{if(l.len==null)l.len=''});
   migrate45(p);
   p.gear.forEach(g=>{if(g.wsrc)return;const ref=powerOf(g.model,g.cat);if(g.watts===''||g.watts==null){g.watts=String(ref.w);g.wsrc=ref.src}else g.wsrc=(+g.watts===ref.w)?ref.src:'manual'});
@@ -1936,7 +1949,7 @@ const BUILTIN_MODELS=[
   rd:[['Pré-jogo','Ao vivo',900,'CAM 01'],['1º tempo','Ao vivo',2700,'CAM 01'],['Intervalo','VT',900,'GC / VT'],['2º tempo','Ao vivo',2700,'CAM 01'],['Pós-jogo','Ao vivo',600,'CAM 02']],
   crew:[['Direção de TV','CH1 Direção'],['Diretor de imagens','CH1 Direção'],['Engenharia / shading','CH2 Técnica'],...[1,2,3,4,5,6].map(i=>['Câmera 0'+i,'CH3 Câmeras']),['Replay / GC','CH1 Direção'],['Áudio','CH4 Áudio']]}
 ];
-const MODEL_PARTS=[['patch','Equipamentos, racks, patch e multiview'],['rundown','Espelho do programa'],['crew','Equipe (funções e canais)'],['check','Checklist técnico'],['audio','Áudio'],['space','Planta, house e passagem de cabos'],['notes','Observações']];
+const MODEL_PARTS=[['patch','Equipamentos, cases, racks, patch e multiview'],['rundown','Espelho do programa'],['crew','Equipe (funções e canais)'],['check','Checklist técnico'],['audio','Áudio'],['space','Planta, house e passagem de cabos'],['notes','Observações']];
 function dayPatternOf(p){const ds=p.days||[];if(!ds.length)return [];const t0=parseYMD(ds[0].date);return ds.map(d=>[Math.round((parseYMD(d.date)-t0)/864e5),d.type,d.onair||'',d.label||''])}
 function daysFromPattern(pat,start){const t0=parseYMD(start);return pat.map(([off,type,onair,label])=>{const d=new Date(t0);d.setDate(t0.getDate()+off);return {id:uid(),date:ymd(d),type,onair:onair||'',label:label||''}})}
 function modelInfo(m){if(m.wz){const o={...WZ_BASE,...m.wz};return `${o.ncam+o.nptz} câmeras · ${m.days.length} dia(s) · ${m.rd.length} blocos`}const d=m.data;return `${d.gear.length} equip. · ${(d.racks||[]).length?d.racks.length+' rack(s) · ':''}${(m.pattern||[]).length||'—'} dia(s) · ${d.rundown.length} blocos`}
@@ -1956,7 +1969,7 @@ function createFromModel(m,v){
 }
 function saveAsModel(p,name,desc,parts){
   const d=strip(p),blank=newProject('x');
-  if(!parts.patch){['gear','links','mv'].forEach(k=>d[k]=blank[k]);d.racks=[];d.vh={};d.extras=[];d.camsheets={}}
+  if(!parts.patch){['gear','links','mv'].forEach(k=>d[k]=blank[k]);d.racks=[];d.vh={};d.extras=[];d.camsheets={};d.cases=[]}
   if(!parts.rundown)d.rundown=[];else d.rundown=d.rundown.map(b=>({...b,dayIdx:Math.max(0,(p.days||[]).findIndex(x=>x.id===b.day)),day:null}));
   if(!parts.crew)d.crew=[];
   if(!parts.check)d.check=blank.check;
@@ -2032,6 +2045,7 @@ function sepItems(p){
   Object.entries(solo).sort((a,b)=>(a[1][0].cat+a[0]).localeCompare(b[1][0].cat+b[0])).forEach(([m,gs])=>items.push({key:'g:'+m,group:gs[0].cat,label:m,sub:gs.map(g=>g.name).join(', '),qty:gs.length,stock:{need:ng[m],have:I.gear[m]||0}}));
   const nc=needCab(p);Object.entries(nc).sort().forEach(([k,n])=>{const [t,L]=k.split('|');items.push({key:'c:'+k,group:'Cabos',label:L==='?'?`Cabo ${t} · sem metragem`:`Cabo ${t} · ${L.replace('.',',')} m`,sub:`inclui ${p.orderSpare??10}% de reserva`,qty:n,stock:L==='?'?null:{need:n,have:+I.cab[k]||0}})});
   const d=orderData(p);Object.entries(d.conv).forEach(([k,n])=>items.push({key:'v:'+k,group:'Conversores',label:k,qty:n,stock:{need:n,have:I.gear[k]||0}}));
+  (p.cases||[]).filter(c=>c.items.length).forEach(c=>items.push({key:'cs:'+c.id,group:'Cases',label:`▤ ${c.name}`,sub:c.items.map(i=>`${fmtQ(i.qty)} ${i.name}`).join(' · '),qty:1}));
   (p.extras||[]).filter(e=>e.qty>0&&!/^Rack \d+U \(case\)$/.test(e.name)).forEach(e=>items.push({key:'x:'+e.name,group:'Acessórios',label:e.name,qty:e.qty}));
   return items;
 }
@@ -2055,6 +2069,130 @@ R.sep=()=>{
 };
 function sepReportHTML(p,tb,H){const st=sepStats(p),s=p.sep||{},show=invHas();const groups=[...new Set(st.items.map(i=>i.group))];const nc=show?6:5;
   return `<p class="note">Separado ${st.out}/${st.n} · retornou ${st.ret}/${st.n}. Marque à mão na saída e na volta.</p><table class="septb"><colgroup><col><col style="width:12mm">${show?'<col style="width:22mm">':''}<col style="width:14mm"><col style="width:16mm"><col style="width:42mm"></colgroup><thead><tr><th>Item</th><th class="num r">Qtd</th>${show?'<th>Estoque</th>':''}<th class="c">Saída</th><th class="c">Retorno</th><th>Observação</th></tr></thead><tbody>${groups.map(g=>`<tr class="grp"><td colspan="${nc}">${esc(g)}</td></tr>`+st.items.filter(i=>i.group===g).map(i=>{const x=s[i.key]||{};return `<tr><td><b>${esc(i.label)}</b>${i.sub?`<br><span class="muted" style="font-size:7.5pt">${esc(i.sub)}</span>`:''}</td><td class="num r">${i.qty}</td>${show?`<td>${i.stock?(i.stock.need>i.stock.have?`<b>falta ${i.stock.need-i.stock.have}</b>`:'ok'):'—'}</td>`:''}<td class="c"><span class="box">${x.out?'✓':''}</span></td><td class="c"><span class="box">${x.ret?'✓':''}</span></td><td>${esc(x.note||'')}</td></tr>`}).join('')).join('')}</tbody></table>`}
+
+/* =========================================================
+   V48 — cases e itens avulsos, papel timbrado no caderno
+   ========================================================= */
+/* ---------- leitor de .docx (zip) ---------- */
+async function unzip(buf){
+  const dv=new DataView(buf);let e=buf.byteLength-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error('O arquivo não é um .docx válido.');
+  const n=dv.getUint16(e+10,true);let o=dv.getUint32(e+16,true);const out={};const td=new TextDecoder();
+  for(let i=0;i<n;i++){const m=dv.getUint16(o+10,true),cs=dv.getUint32(o+20,true),nl=dv.getUint16(o+28,true),xl=dv.getUint16(o+30,true),cl=dv.getUint16(o+32,true),lo=dv.getUint32(o+42,true);
+    const name=td.decode(new Uint8Array(buf,o+46,nl));o+=46+nl+xl+cl;
+    out[name]=async()=>{const lnl=dv.getUint16(lo+26,true),lxl=dv.getUint16(lo+28,true);const data=new Uint8Array(buf,lo+30+lnl+lxl,cs);if(m===0)return data.slice();
+      const r=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));return new Uint8Array(await new Response(r).arrayBuffer())}}
+  return out;
+}
+const W_NS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+async function zText(z,name){if(!z[name])return null;return new TextDecoder().decode(await z[name]())}
+const xmlDoc=t=>new DOMParser().parseFromString(t,'application/xml');
+function relsMap(t){const m={};if(!t)return m;xmlDoc(t).querySelectorAll('Relationship').forEach(r=>m[r.getAttribute('Id')]=r.getAttribute('Target'));return m}
+async function docxParas(z){const t=await zText(z,'word/document.xml');if(!t)return [];const d=xmlDoc(t);
+  return [...d.getElementsByTagNameNS(W_NS,'p')].map(p=>{const runs=[...p.getElementsByTagNameNS(W_NS,'r')];const text=runs.map(r=>[...r.getElementsByTagNameNS(W_NS,'t')].map(x=>x.textContent).join('')).join('');
+    const isB=el=>{const b=el&&el.getElementsByTagNameNS(W_NS,'b')[0];return !!b&&b.getAttributeNS(W_NS,'val')!=='0'&&b.getAttributeNS(W_NS,'val')!=='false'};
+    const tr=runs.filter(r=>[...r.getElementsByTagNameNS(W_NS,'t')].some(x=>x.textContent.trim()));
+    const bold=tr.length>0&&tr.every(r=>isB(r.getElementsByTagNameNS(W_NS,'rPr')[0]));
+    const st=(p.getElementsByTagNameNS(W_NS,'pStyle')[0]||{getAttributeNS:()=>''}).getAttributeNS(W_NS,'val')||'';
+    return {text:text.replace(/\s+/g,' ').trim(),bold,head:/^(Heading|Ttulo|Titulo|Título)/i.test(st)}}).filter(x=>x.text)}
+async function bytesToDataURL(bytes,mime){const blob=new Blob([bytes],{type:mime});let url=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(blob)});
+  if(url.length>1.2e6){const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=url});const w=1654,h=Math.round(img.height*w/img.width);const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);url=c.toDataURL('image/jpeg',.86)}
+  return url}
+async function docxLetterhead(z){
+  const doc=await zText(z,'word/document.xml');if(!doc)throw new Error('Não encontrei o conteúdo do Word.');const d=xmlDoc(doc);
+  const sects=d.getElementsByTagNameNS(W_NS,'sectPr');const sp=sects[sects.length-1];if(!sp)throw new Error('O Word não tem configuração de página.');
+  const rels=relsMap(await zText(z,'word/_rels/document.xml.rels'));
+  const refs={};[...sp.getElementsByTagNameNS(W_NS,'headerReference')].forEach(h=>refs[h.getAttributeNS(W_NS,'type')]=h.getAttribute('r:id')||h.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id'));
+  const titlePg=sp.getElementsByTagNameNS(W_NS,'titlePg').length>0;
+  const imgOf=async rid=>{if(!rid||!rels[rid])return null;const hf='word/'+rels[rid].replace(/^\.?\//,'');const ht=await zText(z,hf);if(!ht)return null;
+    const hr=relsMap(await zText(z,hf.replace(/([^/]+)$/,'_rels/$1.rels')));const m=ht.match(/r:embed="([^"]+)"/);if(!m||!hr[m[1]])return null;
+    const path='word/'+hr[m[1]].replace(/^\.?\//,'').replace(/^\.\.\//,'');const ext=(path.split('.').pop()||'').toLowerCase();if(!z[path]||!/png|jpe?g|gif|bmp|webp/.test(ext))return null;
+    return bytesToDataURL(await z[path](),ext==='jpg'?'image/jpeg':'image/'+ext)};
+  const other=await imgOf(refs.default);const first=titlePg?(await imgOf(refs.first))||other:other;
+  if(!other&&!first)throw new Error('Não achei imagem de fundo no cabeçalho do Word. Use “Imagem…” para escolher o PNG do papel timbrado.');
+  const pm=sp.getElementsByTagNameNS(W_NS,'pgMar')[0];const tw=a=>pm?Math.round((+pm.getAttributeNS(W_NS,a)||0)*25.4/1440):null;
+  return {first:first||other,other:other||first,m:pm?[tw('top'),tw('right'),tw('bottom'),tw('left')]:[35,25,30,25]};
+}
+async function accentOf(url){try{const img=await new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=url});const c=document.createElement('canvas');c.width=120;c.height=170;const x=c.getContext('2d');x.drawImage(img,0,0,120,170);
+  const d=x.getImageData(0,0,120,170).data;const cnt={};for(let i=0;i<d.length;i+=4){const r=d[i],g=d[i+1],b=d[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);if(d[i+3]<200||mx-mn<70||mx<60)continue;const k=(r>>4)+','+(g>>4)+','+(b>>4);cnt[k]=(cnt[k]||0)+1}
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];if(!top||top[1]<20)return null;const [r,g,b]=top[0].split(',').map(v=>(+v<<4)+8);
+  const L=(r*299+g*587+b*114)/1000;const k=L>150?150/L:1;return '#'+[r,g,b].map(v=>Math.round(v*k).toString(16).padStart(2,'0')).join('')}catch(e){return null}}
+
+/* ---------- papel timbrado ---------- */
+const lhOn=()=>S.brand&&S.brand.on&&S.brand.first?S.brand:null;
+function lhWrap(B,inner){const [t,r,b,l]=B.m.map(v=>Math.max(0,+v||0));
+  return `<style>.doc:has(.lh-wrap){${B.acc?`--acc:${B.acc};`:''}}
+.lh-bg,.lh-bg1{display:none}
+.doc-preview .doc:has(.lh-wrap){padding:0;position:relative;overflow:hidden}
+.doc-preview .lh-bg1{display:block;position:absolute;top:0;left:0;width:100%;height:auto;pointer-events:none}
+.doc-preview .lh-wrap{position:relative;padding:${t}mm ${r}mm ${b}mm ${l}mm}
+.doc-preview .lh-wrap .pb{border-top-color:#9db3a7}
+.lh-wrap .cover .band{background:transparent;color:var(--ink);padding:0 0 3mm;border-bottom:1.5pt solid var(--ink)}
+.lh-wrap .cover .band small{color:var(--soft)}
+.lh-wrap .cover .band .brand i{background:var(--acc)}
+.lh-wrap .cover .kind{margin-top:10mm}
+.lh-wrap .cover h1{font-size:40pt}
+@media print{
+  @page{size:A4;margin:0}
+  .doc:has(.lh-wrap){background:transparent!important;padding:0!important}
+  .lh-bg{display:block;position:fixed;top:0;left:0;width:210mm;height:297mm;z-index:-2}
+  .lh-bg1{display:block;position:absolute;top:0;left:0;width:210mm;height:297mm;z-index:-1}
+  .lh-wrap{padding:${t}mm ${r}mm ${b}mm ${l}mm;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+  .lh-wrap .cover{min-height:calc(297mm - ${t+b+3}mm)}
+}</style><img class="lh-bg" src="${B.other||B.first}" alt=""><img class="lh-bg1" src="${B.first}" alt=""><div class="lh-wrap">${inner}</div>`}
+function lhPanelHTML(){const B=S.brand;
+  return `<h3 style="margin-top:18px">Papel timbrado</h3>
+  ${B&&B.first?`<div class="row" style="gap:8px;margin:10px 0"><figure style="margin:0;width:84px"><img src="${B.first}" style="width:100%;border:1px solid var(--line);border-radius:4px;display:block;background:#fff"><figcaption class="note" style="margin:3px 0 0">1ª página</figcaption></figure><figure style="margin:0;width:84px"><img src="${B.other}" style="width:100%;border:1px solid var(--line);border-radius:4px;display:block;background:#fff"><figcaption class="note" style="margin:3px 0 0">Demais</figcaption></figure></div>
+   <label class="row" style="gap:8px;font-size:13px;padding:3px 0"><input type="checkbox" id="lhOn" ${B.on?'checked':''}> Usar no caderno técnico</label>
+   <p class="sub" style="margin:8px 0 4px">Margens do texto (mm)</p><div class="row" style="gap:6px">${['Topo','Direita','Base','Esquerda'].map((l,i)=>`<label style="display:grid;gap:2px;font-size:11px;color:var(--mute);text-align:center">${l}<input class="in num" type="number" min="0" max="80" data-lhm="${i}" value="${B.m[i]}" style="width:56px;text-align:center;padding:5px"></label>`).join('')}</div>
+   <label class="row" style="gap:8px;font-size:13px;margin-top:10px">Cor de destaque <input type="color" id="lhAcc" value="${B.acc||'#0a8f45'}" style="width:40px;height:26px;border:0;background:none;padding:0"></label>
+   <div class="row" style="margin-top:10px"><button class="btn sm" id="lhDocx">Trocar pelo Word…</button><button class="btn sm" id="lhImg">Imagem…</button><button class="btn sm danger" id="lhDel">Remover</button></div>`
+  :`<p class="note" style="margin:6px 0 10px">Importe o Word (.docx) do papel timbrado da empresa: o caderno sai com o fundo, o logo, as margens e a cor dele, mantendo o resto do layout.</p><div class="row"><button class="btn sm go" id="lhDocx">Importar do Word…</button><button class="btn sm" id="lhImg" title="Uma imagem A4 para todas as páginas, ou duas: 1ª página e demais">Imagem…</button></div>`}
+  <input type="file" id="lhFileD" accept=".docx" hidden><input type="file" id="lhFileI" accept="image/png,image/jpeg" multiple hidden>`}
+function lhBind(after){
+  const pick=(id,cb)=>{const i=$(id);i.value='';i.onchange=()=>cb([...i.files]);i.click()};
+  const done=async B=>{B.acc=B.acc||await accentOf(B.other||B.first);B.on=true;S.brand=B;save();after();toast('Papel timbrado aplicado ao caderno técnico')};
+  $('#lhDocx').onclick=()=>pick('#lhFileD',async fs=>{if(!fs[0])return;try{const z=await unzip(await fs[0].arrayBuffer());const r=await docxLetterhead(z);await done({...r,name:fs[0].name})}catch(e){toast(e.message||'Não foi possível ler o Word.')}});
+  $('#lhImg').onclick=()=>pick('#lhFileI',async fs=>{if(!fs.length)return;const urls=[];for(const f of fs.slice(0,2))urls.push(await bytesToDataURL(new Uint8Array(await f.arrayBuffer()),f.type));const old=S.brand||{};await done({first:urls[0],other:urls[1]||urls[0],m:old.m||[35,25,30,25],acc:null,name:fs[0].name})});
+  if($('#lhOn'))$('#lhOn').onchange=e=>{S.brand.on=e.target.checked;save();after()};
+  $$('[data-lhm]').forEach(i=>i.onchange=()=>{S.brand.m[+i.dataset.lhm]=clamp(+i.value||0,0,80);save();after()});
+  if($('#lhAcc'))$('#lhAcc').onchange=e=>{S.brand.acc=e.target.value;save();after()};
+  if($('#lhDel'))$('#lhDel').onclick=()=>confirmBox('Remover o papel timbrado? O caderno volta ao layout padrão.','Remover',()=>{S.brand=null;save();after()});
+}
+
+/* ---------- cases e itens avulsos ---------- */
+const fmtQ=n=>String(+n||0).padStart(2,'0');
+function parseItemLine(t){t=String(t).replace(/^[\s•\-–—☐□▢*]+/,'').trim();const m=t.match(/^(\d+)\s*(?:x|×|un\.?|und\.?|pç|pcs?)?\s*[-–:]?\s+(.+)$/i);return m?{qty:+m[1],name:m[2].trim()}:{qty:1,name:t}}
+function casesFromParas(paras){const out=[];let c=null;paras.forEach(({text,bold,head})=>{const isHead=(bold||head)&&!/^\d/.test(text);if(isHead){c={id:uid(),name:text.replace(/:$/,''),items:[]};out.push(c)}else{if(!c){c={id:uid(),name:'Itens avulsos',items:[]};out.push(c)}const it=parseItemLine(text);if(it.name)c.items.push({id:uid(),...it})}});return out.filter(c=>c.items.length||c.name)}
+const caseItems=c=>c.items.reduce((a,i)=>a+(+i.qty||0),0);
+let csOpen=null;
+function casesPanelHTML(p){const cs=p.cases||[];S.caseLib=S.caseLib||[];
+  return `<div class="panel" style="margin-top:16px" id="casesPanel"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap"><div><h3>Cases e itens avulsos</h3><p class="sub" style="margin:2px 0 0;max-width:62ch">Tudo o que vai para o evento e não tem patch: cabos extras, energia, tripés, baterias. Organize por case — entra na lista de pedido, na separação, nas etiquetas e no caderno.</p></div>
+   <div class="row" style="gap:6px">${S.caseLib.length?`<select class="in" id="csLib" style="width:auto"><option value="">Da biblioteca…</option>${S.caseLib.map(c=>`<option value="${c.id}">${esc(c.name)} · ${c.items.length} itens</option>`).join('')}</select>`:''}<button class="btn" id="csWord" title="Lê o Word: títulos em negrito viram cases e as linhas “01 Item” viram itens">Importar do Word</button><button class="btn go" id="csNew">+ Case</button><input type="file" id="csFile" accept=".docx" hidden></div></div>
+  ${cs.length?`<div class="cases">${cs.map(c=>`<div class="case" data-c="${c.id}"><header><input class="in" data-cf="name" value="${esc(c.name)}"><span class="note" style="margin:0;white-space:nowrap">${c.items.length} itens · ${caseItems(c)} pç</span></header>
+    <div class="ci">${c.items.map(it=>`<div class="row" data-i="${it.id}"><input class="in num" type="number" min="0" data-if="qty" value="${it.qty}"><input class="in" data-if="name" value="${esc(it.name)}"><button class="btn sm ghost" data-ix title="Remover item">✕</button></div>`).join('')}</div>
+    <input class="in csAdd" placeholder="Ex.: 04 Extensões 10 mts — Enter adiciona">
+    <footer><button class="btn sm ghost" data-ca="paste">Colar lista</button><button class="btn sm ghost" data-ca="lib" title="Guardar este case para usar em outros eventos">Salvar na biblioteca</button><button class="btn sm ghost" data-ca="dup" title="Duplicar">⧉</button><button class="btn sm danger" data-ca="del" title="Excluir case">✕</button></footer></div>`).join('')}</div>`
+  :`<div class="empty" style="margin-top:12px"><b>Nenhum case</b>Crie um case (ex.: “Case de Energia”) e liste os itens, ou importe a lista direto do Word.</div>`}</div>`}
+function bindCases(p,rer){
+  p.cases=p.cases||[];const C=id=>p.cases.find(c=>c.id===id);
+  $('#csNew').onclick=()=>{p.cases.push({id:uid(),name:`Case ${String(p.cases.length+1).padStart(2,'0')}`,items:[]});save();rer();setTimeout(()=>{const l=$$('.case input[data-cf="name"]').pop();l&&(l.focus(),l.select())},0)};
+  $('#csLib')&&($('#csLib').onchange=e=>{const c=S.caseLib.find(x=>x.id===e.target.value);if(!c)return;p.cases.push({id:uid(),name:c.name,items:c.items.map(i=>({id:uid(),qty:i.qty,name:i.name}))});save();rer();toast(`${c.name} adicionado`)});
+  $('#csWord').onclick=()=>{const i=$('#csFile');i.value='';i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const z=await unzip(await f.arrayBuffer());const cs=casesFromParas(await docxParas(z));if(!cs.length){toast('Não encontrei listas nesse Word.');return}p.cases.push(...cs);save();rer();toast(`${cs.length} case(s) e ${cs.reduce((a,c)=>a+c.items.length,0)} itens importados`)}catch(e){toast(e.message||'Não foi possível ler o Word.')}};i.click()};
+  $$('.case').forEach(el=>{const c=C(el.dataset.c);
+    el.querySelector('[data-cf="name"]').onchange=e=>{c.name=e.target.value.trim()||c.name;save()};
+    el.querySelectorAll('[data-i]').forEach(r=>{const it=c.items.find(x=>x.id===r.dataset.i);r.querySelectorAll('[data-if]').forEach(inp=>inp.onchange=()=>{it[inp.dataset.if]=inp.dataset.if==='qty'?Math.max(0,parseInt(inp.value)||0):inp.value;save();if(inp.dataset.if==='qty')el.querySelector('header .note').textContent=`${c.items.length} itens · ${caseItems(c)} pç`});r.querySelector('[data-ix]').onclick=()=>{c.items=c.items.filter(x=>x!==it);save();rer()}});
+    const add=el.querySelector('.csAdd');add.onkeydown=e=>{if(e.key!=='Enter'||!add.value.trim())return;c.items.push({id:uid(),...parseItemLine(add.value)});save();rer();setTimeout(()=>{const n=$(`.case[data-c="${c.id}"] .csAdd`);n&&n.focus()},0)};
+    el.querySelectorAll('[data-ca]').forEach(b=>b.onclick=()=>{const a=b.dataset.ca;
+      if(a==='del')confirmBox(`Excluir “${c.name}” com ${c.items.length} itens?`,'Excluir',()=>{p.cases=p.cases.filter(x=>x!==c);save();rer()});
+      if(a==='dup'){p.cases.splice(p.cases.indexOf(c)+1,0,{id:uid(),name:c.name+' (cópia)',items:c.items.map(i=>({...i,id:uid()}))});save();rer()}
+      if(a==='lib'){S.caseLib=S.caseLib||[];const ex=S.caseLib.find(x=>x.name===c.name);const data={name:c.name,items:c.items.map(i=>({qty:i.qty,name:i.name}))};if(ex)Object.assign(ex,data);else S.caseLib.push({id:uid(),...data});save();rer();toast(ex?'Case atualizado na biblioteca':'Case salvo na biblioteca')}
+      if(a==='paste'){$('#modal').innerHTML=`<h3>Colar lista em “${esc(c.name)}”</h3><p class="sub">Uma linha por item. A quantidade no começo da linha é reconhecida (ex.: “02 Extensões 20 mts”).</p><textarea class="in" id="psT" style="min-height:220px" placeholder="01 Rabicho 63 A&#10;10 Réguas&#10;04 Extensões 10 mts"></textarea><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost" id="psC">Cancelar</button><button class="btn go" id="psOk">Adicionar</button></div>`;
+        $('#modalBg').classList.add('open');const close=()=>$('#modalBg').classList.remove('open');$('#psC').onclick=close;setTimeout(()=>$('#psT').focus(),0);
+        $('#psOk').onclick=()=>{const its=$('#psT').value.split(/\r?\n/).map(t=>t.trim()).filter(Boolean).map(parseItemLine);c.items.push(...its.map(i=>({id:uid(),...i})));close();save();rer();toast(`${its.length} item(ns) adicionados`)}}
+    })});
+}
+function casesReportHTML(p){const cs=(p.cases||[]).filter(c=>c.items.length);
+  return `<div class="cslist">${cs.map(c=>`<div class="csblk"><h4>${esc(c.name)}</h4>${c.items.map(i=>`<div class="csit"><span class="box"></span><b class="num">${fmtQ(i.qty)}</b> ${esc(i.name)}</div>`).join('')}</div>`).join('')}</div>`}
 
 /* ---------- sugestão de metragem ---------- */
 const STD_LEN={SDI:[0.5,1,2,3,5,10,15,20,25,30,40,50,75,100],Fibra:[25,50,100,150,200,300,500],HDMI:[0.5,1,2,3,5,10,15],Rede:[0.5,1,2,3,5,10,15,20,30,50,75,100],'Áudio':[1,2,3,5,10,15,20,30,50,100],REF:[1,2,3,5,10,15,20,30,50,100]};
@@ -2097,10 +2235,11 @@ R.order=()=>{
    ${Object.entries(cab).some(([t,c])=>Object.keys(c.list).length)?`<div style="padding:4px 10px 10px;font-size:12.5px;color:var(--soft)">${Object.entries(cab).map(([t,c])=>Object.keys(c.list).length?`<b style="color:var(--text)">${t}:</b> `+Object.entries(c.list).sort((x,y)=>x[0]-y[0]).map(([m,n])=>`${n}× ${String(m).replace('.',',')} m`).join(' · '):'').filter(Boolean).join('<br>')}</div>`:''}</div>
    <div class="panel" style="padding:6px"><div style="padding:10px 10px 0"><h3>Rotas físicas</h3></div>${Object.keys(rotas).length?`<table class="t"><tbody>${Object.entries(rotas).map(([t,x])=>`<tr><td>${esc(t)}</td><td class="num">${x.n} rota(s)</td><td class="num">${x.m?fmt(x.m*1.1*sp,0)+' m':'sem metragem'}</td></tr>`).join('')}</tbody></table>`:'<p class="note" style="padding:0 10px 10px">Nenhuma rota desenhada.</p>'}</div>
    <div class="panel"><h3>Acessórios</h3>${(p.extras||[]).length?`<ul class="checks" style="margin-top:8px">${p.extras.map(e=>`<li><span class="dot" style="background:var(--cyan)"></span>${e.qty}× ${esc(e.name)}</li>`).join('')}</ul>`:'<p class="note">Nenhum acessório. Eles entram pelos Kits de equipamento.</p>'}</div>
+   ${(p.cases||[]).some(c=>c.items.length)?`<div class="panel"><h3>Cases e itens</h3><div class="crew" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-top:10px">${p.cases.filter(c=>c.items.length).map(c=>`<div><b style="font-size:13px">${esc(c.name)}</b><ul class="checks" style="margin-top:6px">${c.items.map(i=>`<li><span class="dot" style="background:var(--amber)"></span>${fmtQ(i.qty)} ${esc(i.name)}</li>`).join('')}</ul></div>`).join('')}</div><p class="note">Edite em Equipamentos → Cases e itens avulsos.</p></div>`:''}
    <div class="panel"><h3>Conversores sugeridos</h3>${Object.keys(conv).length?`<ul class="checks" style="margin-top:8px">${Object.entries(conv).map(([k,n])=>`<li><span class="dot" style="background:var(--amber)"></span>${n}× ${esc(k)}</li>`).join('')}</ul>`:'<p class="note">Nenhuma ligação com tipos diferentes nas pontas.</p>'}</div></div></div>`;
   $('#odSp').onchange=e=>{p.orderSpare=+e.target.value||0;save();R.order()};
   $('#odSug').onclick=()=>{const n=suggestAll(p);save();R.order();toast(n?`${n} cabo(s) com metragem sugerida. As que você digitou não mudam; ajuste no Patch.`:'Todos os cabos já têm metragem.')};
-  $('#odCsv').onclick=()=>download(`pedido-${slug(p.name)}.csv`,csv([['Seção','Item','Quantidade','Metragem'],...Object.entries(byModel).map(([m,x])=>['Equipamento',m,x.n,'']),...Object.entries(cab).map(([t,c])=>['Cabo patch',t,Math.ceil(c.n*sp),c.m?fmt(c.m*sp,0):'']),...Object.entries(rotas).map(([t,x])=>['Rota física',t,x.n,x.m?fmt(x.m*1.1*sp,0):'']),...Object.entries(conv).map(([k,n])=>['Conversor',k,n,'']),...(p.extras||[]).map(e=>['Acessório',e.name,e.qty,''])]),'text/csv');
+  $('#odCsv').onclick=()=>download(`pedido-${slug(p.name)}.csv`,csv([['Seção','Item','Quantidade','Metragem'],...Object.entries(byModel).map(([m,x])=>['Equipamento',m,x.n,'']),...Object.entries(cab).map(([t,c])=>['Cabo patch',t,Math.ceil(c.n*sp),c.m?fmt(c.m*sp,0):'']),...Object.entries(rotas).map(([t,x])=>['Rota física',t,x.n,x.m?fmt(x.m*1.1*sp,0):'']),...Object.entries(conv).map(([k,n])=>['Conversor',k,n,'']),...(p.extras||[]).map(e=>['Acessório',e.name,e.qty,'']),...(p.cases||[]).flatMap(c=>c.items.map(i=>['Case: '+c.name,i.name,i.qty,'']))]),'text/csv');
 };
 
 /* ---------- etiquetas ---------- */
@@ -3632,12 +3771,13 @@ const LB_SHEETS={
   a4263:{n:'Pimaco A4263 · 99,1 × 38,1 mm · 14 por folha',w:99.1,h:38.1,c:2,r:7,t:15.15,l:4.65,gx:2.5,gy:0,fs:1.45},
   free:{n:'A4 comum para recortar · 3 × 8',w:63,h:33,c:3,r:8,t:12,l:9,gx:3,gy:2,fs:1.15,cut:true}
 };
-let lbTab='cab',lbSheet='a4256',lbBoth=true,lbTypes=null,lbSkip=0,lbCaseOpt={racks:true,gear:true,cab:true,extras:false};
+let lbTab='cab',lbSheet='a4256',lbBoth=true,lbTypes=null,lbSkip=0,lbCaseOpt={racks:true,cases:true,gear:true,cab:true,extras:false};
 function lbEnd(p,l){const a=gearById(l.a),b=gearById(l.b);return {id:l.label||'',a:a?a.name:'?',ap:a?(a.outs.find(x=>x.id===l.ap)||{}).name||'':'',b:b?b.name:'?',bp:b?(b.ins.find(x=>x.id===l.bp)||{}).name||'':'',t:l.type,len:parseFloat(l.len)>0?String(l.len).replace('.',','):''}}
 function cableLabels(p){const types=lbTypes||new Set(SIGS);const out=[];p.links.filter(l=>types.has(l.type)&&l.type!=='RF').forEach(l=>{const x=lbEnd(p,l);if(lbBoth){out.push({...x,end:'A'});out.push({...x,end:'B'})}else out.push(x)});return out}
 function caseLabels(p){
   const o=lbCaseOpt,out=[];const per=(p.days||[]).length?periodLabel(p):(p.date?new Date(p.date).toLocaleDateString('pt-BR'):'');
   if(o.racks)(p.racks||[]).forEach(r=>{const gs=p.gear.filter(g=>g.rack===r.id);if(gs.length)out.push({title:r.name,sub:`Rack ${r.u}U`,list:gs.map(g=>g.name).join(' · '),code:`${r.name}`})});
+  if(o.cases!==false)(p.cases||[]).filter(c=>c.items.length).forEach(c=>out.push({title:c.name,sub:`${c.items.length} itens · ${caseItems(c)} peças`,list:c.items.map(i=>`${fmtQ(i.qty)} ${i.name}`).join(' · '),code:c.name}));
   if(o.gear)p.gear.filter(g=>!g.rack||!(p.racks||[]).some(r=>r.id===g.rack)).forEach(g=>out.push({title:g.name,sub:g.model,list:'',code:g.name}));
   if(o.cab){const nc=needCab(p);const byT={};Object.entries(nc).forEach(([k,n])=>{const [t,L]=k.split('|');(byT[t]=byT[t]||[]).push(`${n}× ${L==='?'?'s/ medida':L.replace('.',',')+' m'}`)});Object.entries(byT).forEach(([t,ls])=>out.push({title:`Cabos ${t}`,sub:'Bobinas / bolsa',list:ls.join(' · '),code:`Cabos ${t}`}))}
   if(o.extras)(p.extras||[]).filter(e=>e.qty>0&&!/^Rack \d+U/.test(e.name)).forEach(e=>out.push({title:e.name,sub:`Qtd ${e.qty}`,list:'',code:e.name}));
@@ -3687,7 +3827,7 @@ R.labels=()=>{
     ${lbTab==='cab'?`<label class="row" style="gap:8px;font-size:13px;margin:4px 0 10px"><input type="checkbox" id="lbBoth" ${lbBoth?'checked':''}> Uma para cada ponta (A e B)</label>
      <p class="sub" style="margin:0 0 6px">Tipos de cabo</p>${SIGS.filter(t=>t!=='RF').map(t=>{const n=p.links.filter(l=>l.type===t).length;return `<label class="row" style="gap:8px;font-size:13px;padding:2px 0;${n?'':'opacity:.45'}"><input type="checkbox" data-ty="${t}" ${lbTypes.has(t)?'checked':''}><i style="width:9px;height:9px;border-radius:50%;background:${SIG[t]}"></i>${t} <span style="color:var(--mute)">${n}</span></label>`}).join('')}
      <p class="note">A ponta A fica na saída (origem) e a ponta B na entrada (destino). A linha em negrito mostra onde aquela etiqueta é colada.</p>`
-    :`<p class="sub" style="margin:4px 0 6px">Incluir</p>${[['racks','Racks (1 etiqueta por rack)'],['gear','Equipamentos fora de rack'],['cab','Bolsas de cabo por tipo'],['extras','Acessórios da lista de pedido']].map(([k,l])=>`<label class="row" style="gap:8px;font-size:13px;padding:2px 0"><input type="checkbox" data-co="${k}" ${lbCaseOpt[k]?'checked':''}> ${l}</label>`).join('')}
+    :`<p class="sub" style="margin:4px 0 6px">Incluir</p>${[['racks','Racks (1 etiqueta por rack)'],['cases','Cases e itens avulsos'],['gear','Equipamentos fora de rack'],['cab','Bolsas de cabo por tipo'],['extras','Acessórios da lista de pedido']].map(([k,l])=>`<label class="row" style="gap:8px;font-size:13px;padding:2px 0"><input type="checkbox" data-co="${k}" ${lbCaseOpt[k]?'checked':''}> ${l}</label>`).join('')}
      <p class="note">O QR code traz o nome do evento, o período, o item e o número do volume. Qualquer câmera de celular lê, sem precisar de app.</p>`}
     <p class="note" style="margin-top:12px">${items.length} etiqueta(s) · ${pages} folha(s)</p></div>
    <div>${items.length?`<div class="lbwrap"><div class="lbprev" id="lbPrev">${lbSheetsHTML(items,render,sh)}</div></div>`:`<div class="empty"><b>Nada para etiquetar</b>${lbTab==='cab'?'Faça ligações no Patch ou marque outros tipos de cabo.':'Adicione equipamentos ou racks ao projeto.'}</div>`}</div></div>`;
