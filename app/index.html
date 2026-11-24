@@ -2352,98 +2352,140 @@ function bindAddr(p){
 /* =========================================================
    V48 — importar pedido / proposta comercial (PDF, Word ou texto)
    ========================================================= */
-const PD_FIELDS=[['cliente',/^cliente$/i],['solicitante',/^solicitante$/i],['montagem',/^montagem(\s*\/\s*ensaio)?$|^ensaio$/i],['evento',/^evento$|^data(s)?( do evento)?$/i],['desmontagem',/^desmontagem$/i],['local',/^local$/i],['duracao',/^dura[çc][ãa]o( di[áa]ria)?$|^hor[áa]rio$/i]];
-function pdLines(text){return String(text).replace(/\r/g,'').split('\n').map(l=>l.replace(/[ \t]+/g,' ').replace(/\s+/g,' ').trim()).filter(l=>l&&!/^\d+\s*$/.test(l)&&!/^p[áa]gina \d+/i.test(l))}
+const PD_FIELDS=[['cliente',/^cliente$/i],['solicitante',/^solicitante$/i],['montagem',/^montagem(\s*\/\s*ensaio)?$/i],['ensaio',/^ensaios?$/i],['evento',/^evento$|^data(s)?( do evento)?$/i],['folga',/^day ?off$|^folga$/i],['desmontagem',/^desmontagem$/i],['local',/^local$/i],['duracao',/^dura[çc][ãa]o( di[áa]ria)?$|^hor[áa]rio$/i]];
+const PD_IGNORE=/^(revisado em|solicitado por|proposta comercial|validade|data)\b/i;
+function pdLines(text){
+  const raw=String(text).replace(/\r/g,'').split('\n').map(l=>l.replace(/[ \t]+/g,' ').replace(/\s+/g,' ').trim()).filter(l=>l&&!/^\d+\s*$/.test(l)&&!/^p[áa]gina \d+/i.test(l));
+  // junta linhas quebradas no meio de um item (ex.: "... (Com sistema" + "SMPTE);")
+  const out=[];raw.forEach(l=>{const prev=out[out.length-1];
+    const open=prev&&(prev.match(/\(/g)||[]).length>(prev.match(/\)/g)||[]).length;if(prev&&/^\d{1,3}\s/.test(prev)&&!/[;:.!?]$/.test(prev)&&!/^\d{1,3}\s/.test(l)&&!/^[^:]{2,40}:/.test(l)&&!/^equip/i.test(l)&&(open||/^[a-zà-ú(]/.test(l)))out[out.length-1]=prev+' '+l;else out.push(l)});
+  return out}
+function pdField(l){const m=l.match(/^([^:]{2,40}):\s*(.*)$/);if(!m)return null;const k=PD_FIELDS.find(([,re])=>re.test(m[1].trim()));return k?[k[0],m[2].trim()]:null}
 function pdDates(s,year){
-  s=String(s);const yr=(s.match(/\b(20\d\d)\b/)||[])[1]||year||new Date().getFullYear();const out=[];
+  s=String(s).replace(/\(.*?\)/g,'');const yr=(s.match(/\b(20\d\d)\b/)||[])[1]||year||new Date().getFullYear();const out=[];
   const full=[...s.matchAll(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/g)];
-  // "03 e 04/12/2026", "03, 04 e 05/12", "03 a 05/12/2026"
   const m=s.match(/^(.*?)(\d{1,2})\/(\d{1,2})/);
   if(m){const mon=+m[3];const before=m[1];const nums=[...before.matchAll(/\b(\d{1,2})\b/g)].map(x=>+x[1]).filter(d=>d>=1&&d<=31);
     if(/\d\s*(a|até|-|–)\s*$/.test(before.trim())&&nums.length){for(let d=nums[nums.length-1];d<=+m[2];d++)out.push([d,mon])}
-    else{nums.forEach(d=>out.push([d,mon]));}}
+    else nums.forEach(d=>out.push([d,mon]))}
   full.forEach(x=>out.push([+x[1],+x[2],x[3]]));
   const seen=new Set();return out.map(([d,mo,y])=>{const Y=y?(String(y).length===2?2000+ +y:+y):+yr;return `${Y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`}).filter(k=>!isNaN(Date.parse(k))&&!seen.has(k)&&seen.add(k)).sort()}
 function pdItem(l){const m=l.match(/^(\d{1,3})\s*(?:x|×|un\.?|und\.?)?\s+(.+?)[;.,]?$/i);return m?{qty:+m[1],text:m[2].replace(/[;.]$/,'').trim()}:{qty:0,text:l.replace(/[;.]$/,'').trim()}}
+const PD_EQ=/^equipamentos( e servi[çc]os)?:?$/i,PD_CREW=/^equipe( composta por| t[ée]cnica)?:?$/i,PD_END=/^(valor|investimento|condi[çc][õo]es|observa[çc][õo]es|total|forma de pagamento|validade|obs\.?)\b/i;
 function parsePedido(text){
-  const L=pdLines(text);const r={fields:{},num:'',blocks:[],raw:L};let i=0;
-  const head=L.findIndex(l=>/^evento:?$/i.test(l));
-  const numL=L.find(l=>/\bV\d+\b|\b\d{3,5}[_\-/]\d{2}\b/.test(l)&&l.length<40);if(numL)r.num=numL;
-  if(head>=0&&L[head+1]&&!/:/.test(L[head+1]))r.fields.nome=L[head+1];
-  L.forEach((l,k)=>{const m=l.match(/^([^:]{2,40}):\s*(.*)$/);if(!m)return;const key=PD_FIELDS.find(([,re])=>re.test(m[1].trim()));if(!key)return;let v=m[2].trim();if(!v&&L[k+1]&&!/:/.test(L[k+1]))v=L[k+1];
-    if(key[0]==='evento'&&!/\d{1,2}\s*\/\s*\d{1,2}/.test(v)){if(!r.fields.nome)r.fields.nome=v;return}
-    if(r.fields[key[0]]==null)r.fields[key[0]]=v});
-  // blocos: começam no título que vem antes de "Equipamentos e serviços"
-  let cur=null,mode=null;
-  for(i=0;i<L.length;i++){const l=L[i];
-    if(/^equipamentos( e servi[çc]os)?:?$/i.test(l)){if(!cur||cur.items.length){cur={title:(L[i-1]&&!/:/.test(L[i-1])&&!/^\d/.test(L[i-1])&&L[i-1].length<60?L[i-1]:'Transmissão'),items:[],crew:[]};r.blocks.push(cur)}mode='eq';continue}
-    if(/^equipe( composta por| t[ée]cnica)?:?$/i.test(l)){if(!cur){cur={title:'Transmissão',items:[],crew:[]};r.blocks.push(cur)}mode='crew';continue}
-    if(!cur||!mode)continue;
-    if(/^[^:]{2,40}:\s*\S/.test(l)&&PD_FIELDS.some(([,re])=>re.test(l.split(':')[0].trim())))continue;
-    // título de novo bloco (palco, sala...): linha curta sem número seguida de "Equipamentos"
-    if(L[i+1]&&/^equipamentos( e servi[çc]os)?:?$/i.test(L[i+1])&&!/^\d/.test(l)){mode=null;continue}
-    if(/^(valor|investimento|condi[çc][õo]es|observa[çc][õo]es|total|forma de pagamento|validade)/i.test(l)){mode=null;continue}
-    const it=pdItem(l);
-    if(mode==='crew'){if(it.qty)cur.crew.push(it);continue}
-    const last=cur.items[cur.items.length-1];
-    if(last&&last.open&&it.qty&&last.subQty+it.qty<=last.qty){last.subs.push(it);last.subQty+=it.qty;if(last.subQty>=last.qty)last.open=false;continue}
-    if(last)last.open=false;
-    it.subs=[];it.subQty=0;it.open=/sendo:?$|:$/.test(l)&&it.qty>0;it.text=it.text.replace(/,?\s*sendo:?$/i,'').replace(/:$/,'');cur.items.push(it);
-  }
+  const L=pdLines(text);const r={fields:{},num:'',blocks:[],raw:L};
+  const numL=L.find(l=>/\b\d{3,5}[_\-/]\d{2}\b/.test(l)&&l.length<40);if(numL)r.num=numL;
+  const eqIdx=L.map((l,i)=>PD_EQ.test(l)?i:-1).filter(i=>i>=0);
+  // onde começa cada bloco: título acima dos campos de data do bloco
+  const starts=eqIdx.map(e=>{let j=e-1,fields={};while(j>=0&&(pdField(L[j])||PD_IGNORE.test(L[j]))){const f=pdField(L[j]);if(f)fields[f[0]]=f[1];j--}
+    const t=L[j];const isTitle=t&&!/^\d/.test(t)&&!/[;:]$/.test(t)&&t.length<60&&!PD_EQ.test(t)&&!PD_CREW.test(t);return {e,start:isTitle?j:j+1,title:isTitle?t:'',fields}});
+  const headEnd=starts.length?starts[0].start:L.length;
+  for(let k=0;k<headEnd;k++){const l=L[k];if(/^evento:?$/i.test(l)&&L[k+1]&&!pdField(L[k+1])){r.fields.nome=r.fields.nome||L[k+1];continue}
+    const f=pdField(l);if(!f)continue;let [key,v]=f;if(!v&&L[k+1]&&!pdField(L[k+1]))v=L[k+1];
+    if(key==='evento'&&!/\d{1,2}\s*\/\s*\d{1,2}/.test(v)){r.fields.nome=r.fields.nome||v;continue}
+    if(r.fields[key]==null)r.fields[key]=v}
+  starts.forEach((st,k)=>{
+    const end=k+1<starts.length?starts[k+1].start:L.length;const b={title:st.title||'Transmissão',fields:st.fields,items:[],crew:[]};let mode='eq';
+    for(let i=st.e+1;i<end;i++){const l=L[i];
+      if(PD_CREW.test(l)){mode='crew';continue}if(PD_END.test(l)){mode=null;continue}if(!mode)continue;
+      const it=pdItem(l);if(mode==='crew'){if(it.qty)b.crew.push(it);continue}
+      const last=b.items[b.items.length-1];
+      if(last&&last.open&&it.qty&&/c[âa]mera|rob[óo]tica|ptz|grua|gimbal/i.test(it.text)&&last.subQty+it.qty<=last.qty){last.subs.push(it);last.subQty+=it.qty;if(last.subQty>=last.qty)last.open=false;continue}
+      if(last)last.open=false;
+      it.subs=[];it.subQty=0;it.open=/sendo:?$|:$/.test(l)&&it.qty>0;it.text=it.text.replace(/,?\s*sendo:?$/i,'').replace(/:$/,'');b.items.push(it)}
+    r.blocks.push(b)});
   return r;
 }
-const PD_SW=[[/4\s*m\s*\/?\s*e/i,'ATEM 4 M/E Constellation HD'],[/2\s*m\s*\/?\s*e/i,'ATEM 2 M/E Constellation HD'],[/1\s*m\s*\/?\s*e/i,'ATEM 1 M/E Constellation HD']];
+function pdSwitcher(t){if(/8k/i.test(t))return 'ATEM Constellation 8K';const fourk=/4k/i.test(t);const me=(t.match(/(\d)\s*m\s*\/?\s*e/i)||[])[1];const n=me==='4'?4:me==='1'?1:2;return `ATEM ${n} M/E Constellation ${fourk?'4K':'HD'}`}
+function pdPanel(t){const m=t.match(/painel\s*(\d)\s*m\s*\/?\s*e/i);if(!m)return null;return {1:'ATEM 1 M/E Advanced Panel 10',2:'ATEM 2 M/E Advanced Panel 20',4:'ATEM 4 M/E Advanced Panel 40'}[m[1]]||null}
 function pdPick(re){return Object.values(CATALOG).flat().find(m=>re.test(m))}
-// transforma os itens do pedido em opções do gerador + extras
+function pdCamModel(t){const all=[...(CATALOG['Câmeras']||[]),...(CATALOG['Sony Cinema Line / FX']||[])];const n=s=>s.toLowerCase().replace(/blackmagic|\s+/g,'');return all.find(m=>n(t).includes(n(m)))||null}
 function pdPlan(b){
-  const plan={tripod:0,gimbal:0,ptz:0,handheld:0,sw:null,vh:false,mv:false,rec:false,iso:false,stream:false,gc:false,intercom:false,cases:[],lines:[],crew:b.crew};
+  const plan={tripod:0,smpte:0,grua:0,gimbal:0,ptz:0,libras:0,handheld:0,camModel:null,sw:null,panel:null,ccu:false,lens:null,vh:false,mv:false,rec:false,iso:false,stream:false,gc:false,intercom:false,cases:[],lines:[],crew:b.crew};
   const add=(it,what)=>plan.lines.push({src:`${it.qty?String(it.qty).padStart(2,'0')+' ':''}${it.text}`,what});
   b.items.forEach(it=>{const t=it.text,q=it.qty||1;
-    if(/c[âa]mera|filmadora/i.test(t)&&!/control|ccu|rcp/i.test(t)){
+    if(/libras/i.test(t)){plan.libras+=q;plan.cases.push({qty:q,name:'Kit Libras: fundo chroma key, retorno de vídeo e iluminação'});add(it,`Kit Libras: ${q} PTZ + case com chroma, retorno e luz`);return}
+    if(/lente/i.test(t)&&!/c[âa]mera/i.test(t)){plan.lens={qty:q,text:t.replace(/^lentes?\s*/i,'')};add(it,`Lente ${plan.lens.text} nas ${q} câmeras de tripé`);return}
+    if(/(panel|painel|ccu|rcp|shading|controle de cores)/i.test(t)&&/c[âa]mera/i.test(t)){plan.ccu=true;add(it,'ATEM Camera Control Panel + monitor waveform');return}
+    if(/c[âa]mera|filmadora|rob[óo]tica/i.test(t)){
       const parts=it.subs.length?it.subs:[it];const desc=[];
-      parts.forEach(s=>{const n=s.qty||q;
-        if(/gimbal|estabiliz|steadicam|ronin|sem fio|wireless|rf\b/i.test(s.text)){plan.gimbal+=n;desc.push(`${n} gimbal sem fio`)}
+      parts.forEach(s=>{const n=s.qty||q;const mdl=pdCamModel(s.text);if(mdl&&!plan.camModel)plan.camModel=mdl;
+        if(/gimbal|estabiliz|steadicam|ronin|sem fio|wireless/i.test(s.text)){plan.gimbal+=n;desc.push(`${n} gimbal sem fio`)}
         else if(/ptz|rob[óo]tica|remota/i.test(s.text)){plan.ptz+=n;desc.push(`${n} PTZ`)}
+        else if(/grua|jib|crane/i.test(s.text)){plan.grua+=n;desc.push(`${n} na grua`)}
         else if(/ombro|m[ãa]o|handheld/i.test(s.text)){plan.handheld+=n;desc.push(`${n} no ombro`)}
-        else{plan.tripod+=n;desc.push(`${n} em tripé`)}});
-      add(it,'Câmeras: '+desc.join(', '));return}
-    if(/switcher|mesa de corte|mixer de v[ií]deo|corte/i.test(t)){plan.sw=(PD_SW.find(([re])=>re.test(t))||[0,'ATEM 2 M/E Constellation HD'])[1];add(it,'Switcher: '+plan.sw);return}
+        else if(/smpte|fibra/i.test(s.text)){plan.smpte+=n;desc.push(`${n} em tripé com fibra SMPTE${mdl?' ('+mdl+')':''}`)}
+        else{plan.tripod+=n;desc.push(`${n} em tripé${mdl?' ('+mdl+')':''}`)}});
+      const sum=parts.reduce((a,s)=>a+(s.qty||q),0);
+      add(it,'Câmeras: '+desc.join(', ')+(it.subs.length&&sum<q?` · faltam ${q-sum} no detalhamento (Kit Libras?)`:''));return}
+    if(/switcher|mesa de corte|mixer de v[ií]deo|corte/i.test(t)){plan.sw=pdSwitcher(t);plan.panel=pdPanel(t);add(it,'Switcher: '+plan.sw+(plan.panel?' + '+plan.panel:''));return}
     if(/multiview|monitora/i.test(t)){plan.mv=true;add(it,'Multiview e monitores da direção');return}
     if(/comunica[çc][ãa]o|intercom|talk ?back/i.test(t)){plan.intercom=true;add(it,'Intercom da equipe');return}
     if(/grava[çc]/i.test(t)){if(/iso/i.test(t))plan.iso=true;else plan.rec=true;add(it,plan.iso?'Gravação ISO de cada câmera':'Gravação do PGM');return}
     if(/streaming|transmiss[ãa]o (online|ao vivo)|youtube|live|srt|rtmp/i.test(t)){plan.stream=true;add(it,'Streaming');return}
     if(/videohub|matriz|roteador/i.test(t)){plan.vh=true;add(it,'Matriz de vídeo (Videohub)');return}
-    if(/gc|gerador de caracteres|vmix|playback|vinheta|replay/i.test(t)){plan.gc=true;add(it,'vMix para GC / VT');return}
+    if(/vmix|gc\b|gerador de caracteres|playback|vinheta|replay/i.test(t)){plan.gc=true;add(it,'vMix para GC / VT');return}
     if(/equipe para|montagem\/desmontagem|operação$/i.test(t)){add(it,'Equipe (ver lista abaixo)');return}
     if(/cabos e acess/i.test(t)){add(it,'Case “Cabos e acessórios” para completar');return}
     plan.cases.push({qty:q,name:t+(it.subs.length?' — '+it.subs.map(s=>`${fmtQ(s.qty)} ${s.text}`).join(', '):'')});add(it,'Vai para o case “Itens do pedido”')});
   return plan;
 }
-function pdCrewRole(t){if(/^dtv$|diretor de tv|dire[çc][ãa]o de tv/i.test(t))return ['Diretor de TV','CH1 Direção'];if(/cinegraf|c[âa]mera ?man|operador de c[âa]mera/i.test(t))return ['Cinegrafista','CH3 Câmeras'];if(/gimbal/i.test(t))return ['Operador de gimbal','CH3 Câmeras'];if(/assist/i.test(t))return ['Assistente','CH2 Técnica'];if(/[áa]udio|som/i.test(t))return ['Áudio','CH4 Áudio'];if(/gc|vt|vmix|replay/i.test(t))return [t,'CH1 Direção'];if(/t[ée]cnic|engenh/i.test(t))return ['Técnico','CH2 Técnica'];return [t.replace(/s$/,''),'CH2 Técnica']}
+function pdCrewRole(t){
+  if(/^dtv$|diretor de tv|dire[çc][ãa]o de tv/i.test(t))return ['Diretor de TV','CH1 Direção'];
+  if(/vmix/i.test(t))return ['Técnico de vMix','CH1 Direção'];
+  if(/gimbal/i.test(t))return ['Operador de gimbal','CH3 Câmeras'];
+  if(/grua|jib|crane/i.test(t))return ['Operador de grua','CH3 Câmeras'];
+  if(/rob[óo]tica|ptz/i.test(t))return ['Operador de robótica','CH3 Câmeras'];
+  if(/cinegraf|c[âa]mera ?man|operador(es)? de c[âa]mera/i.test(t))return ['Cinegrafista','CH3 Câmeras'];
+  if(/assist/i.test(t))return ['Assistente','CH2 Técnica'];
+  if(/[áa]udio|som/i.test(t))return ['Áudio','CH4 Áudio'];
+  if(/gc|vt|replay/i.test(t))return [t,'CH1 Direção'];
+  if(/t[ée]cnic|engenh|shading/i.test(t))return ['Técnico','CH2 Técnica'];
+  return [t.replace(/(es|s)$/,''),'CH2 Técnica']}
+function pdMerge(G,B){const own=['montagem','ensaio','evento'].some(k=>B[k]);const F={...G};if(own)['montagem','ensaio','evento','folga'].forEach(k=>delete F[k]);return {...F,...B}}
+function pdDays(F){
+  const yr=Object.values(F).join(' ').match(/20\d\d/);const y=yr&&yr[0];
+  const D={mo:pdDates(F.montagem||'',y),en:pdDates(F.ensaio||'',y),ev:pdDates(F.evento||'',y),fo:pdDates(F.folga||'',y),de:pdDates(F.desmontagem||'',y)};
+  const all=[...new Set(Object.values(D).flat())].sort();const folgaNote=((F.folga||'').match(/\((.*?)\)/)||[])[1]||'';
+  return all.map(d=>{const has=k=>D[k].includes(d);const type=has('ev')?'Evento':has('en')?'Ensaio':has('mo')?(/ensaio/i.test(F.montagemKey||'')?'Ensaio':'Montagem'):has('de')?'Desmontagem':'Folga';
+    const parts=[];if(type!=='Montagem'&&has('mo'))parts.push('montagem');if(type==='Evento'&&has('en'))parts.push('ensaio');
+    let label=parts.length?parts.join(' + ')+' + '+type.toLowerCase():'';if(type==='Folga')label=folgaNote||'Day off';
+    if(type==='Evento'&&d===D.ev[D.ev.length-1]&&F.desmontagem&&!D.de.length)label=[label,'desmontagem '+F.desmontagem.toLowerCase()].filter(Boolean).join(' · ');
+    return {id:uid(),date:d,type,onair:'',label}})}
 function pdBuild(r,b,o){
-  const f=r.fields,plan=pdPlan(b);const nm=(o.name||f.nome||'Evento importado')+(o.suffix?' · '+o.suffix:'');
+  const F=pdMerge(r.fields,b.fields),plan=pdPlan(b);const nm=(o.name||F.nome||'Evento importado')+(o.suffix?' · '+o.suffix:'');
   const p=newProject(nm);normalize(p);
-  const ncam=plan.tripod+plan.handheld;
-  generatePatch(p,{...WZ_BASE,sw:o.sw||plan.sw||'ATEM 2 M/E Constellation HD',cam:o.cam||'URSA Broadcast G2',ncam:Math.max(ncam,0),nptz:plan.ptz,ptz:pdPick(/AW-UE150/)||WZ_BASE.ptz,vmix:plan.gc,vh:plan.vh||plan.iso,isoRec:plan.iso?ncam+plan.ptz+plan.gimbal:0,pgmRec:plan.rec||plan.iso,stream:plan.stream,ret:true,ref:false,mvmon:true,net:true,dist:50,mode:'replace'});
-  if(plan.gimbal){const k=BUILTIN_KITS.find(k=>k.id==='k-wl');insertKit(p,k,plan.gimbal,true);let n=ncam+plan.ptz;p.gear.filter(g=>/^CAM RF/.test(g.name)).forEach(g=>{n++;g.name=`CAM ${String(n).padStart(2,'0')} GIMBAL`});autoLabels(p)}
-  if(plan.intercom&&!p.gear.some(g=>/Intercom/.test(g.model))){const ic=pdPick(/^Intercom \(gen/);if(ic){const g=addGearTo(p,ic,'COM 01');const ns=p.gear.find(x=>/Switch de rede/.test(x.model));const oi=g.outs.findIndex(x=>x.type==='Rede');if(ns&&oi>=0){const ii=freeIn(p,ns,'Rede');if(ii>=0)linkLen(p,g,oi,ns,ii,5)}}}
+  const camModel=o.cam||plan.camModel||'URSA Broadcast G2';
+  const nPlain=plan.tripod+plan.handheld+plan.grua,nPtz=plan.ptz+plan.libras;
+  generatePatch(p,{...WZ_BASE,sw:o.sw||plan.sw||'ATEM 2 M/E Constellation HD',cam:camModel,ncam:nPlain,nptz:nPtz,ptz:pdPick(/AW-UE150$/)||WZ_BASE.ptz,vmix:plan.gc,vh:plan.vh||plan.iso,isoRec:plan.iso?nPlain+nPtz:0,pgmRec:plan.rec||plan.iso,stream:plan.stream,ret:true,ref:false,mvmon:true,net:true,dist:50,mode:'replace'});
+  if(plan.smpte){const k={...BUILTIN_KITS.find(k=>k.id==='k-ursa')};k.items=k.items.map((x,i)=>i===0?[camModel,x[1]]:x);insertKit(p,k,plan.smpte,true)}
+  if(plan.gimbal)insertKit(p,BUILTIN_KITS.find(k=>k.id==='k-wl'),plan.gimbal,true);
+  // nomes: tripé/SMPTE, depois grua, depois gimbal
+  const isCam=g=>FIELD_CATS.includes(g.cat)&&g.cat!=='PTZ Panasonic / Sony';
+  const byId=id=>p.gear.find(x=>x.id===id);const smpteCams=p.gear.filter(g=>isCam(g)&&p.links.some(l=>l.a===g.id&&byId(l.b)&&/Camera Fiber/.test(byId(l.b).model)));
+  const gimbalCams=p.gear.filter(g=>/^CAM RF/.test(g.name));
+  const plainCams=p.gear.filter(g=>isCam(g)&&!smpteCams.includes(g)&&!gimbalCams.includes(g));
+  const gruaCams=plainCams.slice(plainCams.length-plan.grua);const tripCams=[...plainCams.slice(0,plainCams.length-plan.grua),...smpteCams];
+  let n=0;tripCams.forEach(g=>g.name=`CAM ${String(++n).padStart(2,'0')}`);gruaCams.forEach(g=>g.name=`CAM ${String(++n).padStart(2,'0')} GRUA`);gimbalCams.forEach(g=>g.name=`CAM ${String(++n).padStart(2,'0')} GIMBAL`);
+  const ptzs=p.gear.filter(g=>g.cat==='PTZ Panasonic / Sony');ptzs.forEach((g,i)=>g.name=`PTZ ${String(i+1).padStart(2,'0')}`);ptzs.slice(ptzs.length-plan.libras).forEach((g,i)=>g.name=plan.libras>1?`PTZ LIBRAS ${i+1}`:'PTZ LIBRAS');
+  const ns=p.gear.find(x=>/Switch de rede/.test(x.model));
+  const addNet=(model,name)=>{const g=addGearTo(p,model,name);const oi=g.outs.findIndex(x=>x.type==='Rede');if(ns&&oi>=0){const ii=freeIn(p,ns,'Rede');if(ii>=0)linkLen(p,g,oi,ns,ii,5)}return g};
+  if(plan.intercom&&!p.gear.some(g=>/Intercom/.test(g.model))){const ic=pdPick(/^Intercom \(gen/);if(ic)addNet(ic,'COM 01')}
+  if(plan.panel&&pdPick(new RegExp('^'+plan.panel.replace(/[/]/g,'\\/')+'$')))addNet(plan.panel,'PAINEL ATEM');
+  if(plan.ccu){addNet('ATEM Camera Control Panel','CCU 01');const wf=pdPick(/waveform/);if(wf)addGearTo(p,wf,'WFM 01')}
   autoLabels(p);autoLayout(p);suggestAll(p);
-  // datas
-  const yr=((f.evento||'')+(f.montagem||'')).match(/20\d\d/);const evD=pdDates(f.evento||'',yr&&yr[0]),moD=pdDates(f.montagem||'',yr&&yr[0]),deD=pdDates(f.desmontagem||'',yr&&yr[0]);
-  const all=[...new Set([...moD,...evD,...deD])].sort();
-  p.days=all.map(d=>{const ev=evD.includes(d),mo=moD.includes(d),de=deD.includes(d);const type=ev?'Evento':mo?(/ensaio/i.test(f.montagem||'')&&!/montagem/i.test(f.montagem||'')?'Ensaio':'Montagem'):'Desmontagem';
-    const label=[mo&&ev?'Montagem/ensaio + evento':'',ev&&d===evD[evD.length-1]&&f.desmontagem&&!deD.length?'Desmontagem '+f.desmontagem.toLowerCase():''].filter(Boolean).join(' · ');return {id:uid(),date:d,type,onair:'',label}});
-  // rundown vazio por dia de evento, equipe e itens
-  p.rundown=[];
+  p.days=pdDays(F);p.rundown=[];
   const counts={};p.crew=[];plan.crew.forEach(c=>{const [role,ic]=pdCrewRole(c.text);for(let k=0;k<(c.qty||1);k++){counts[role]=(counts[role]||0)+1;p.crew.push({id:uid(),name:(c.qty||1)>1?`${role} ${counts[role]}`:role,role,ic,radio:'',phone:''})}});
-  // cinegrafistas nas câmeras de tripé, operador de gimbal na gimbal
-  const cams=crewCamList(p);const camsT=cams.filter(g=>!/GIMBAL/.test(g.name)&&!/PTZ/.test(g.name)),camsG=cams.filter(g=>/GIMBAL/.test(g.name));
-  p.crew.filter(c=>c.role==='Cinegrafista').forEach((c,k)=>{if(camsT[k]){const x=camInfo(p,camsT[k]).cs;x.op=c.name;x.pos=x.pos||'Tripé'}});
-  p.crew.filter(c=>c.role==='Operador de gimbal').forEach((c,k)=>{if(camsG[k]){const x=camInfo(p,camsG[k]).cs;x.op=c.name;x.pos=x.pos||'Gimbal sem fio'}});
+  const setOp=(g,name,pos)=>{const x=camInfo(p,g).cs;x.op=name;x.pos=x.pos||pos};
+  p.crew.filter(c=>c.role==='Cinegrafista').forEach((c,k)=>{if(tripCams[k])setOp(tripCams[k],c.name,smpteCams.includes(tripCams[k])?'Tripé · fibra SMPTE':'Tripé')});
+  p.crew.filter(c=>c.role==='Operador de grua').forEach((c,k)=>{if(gruaCams[k])setOp(gruaCams[k],c.name,'Grua')});
+  p.crew.filter(c=>c.role==='Operador de gimbal').forEach((c,k)=>{if(gimbalCams[k])setOp(gimbalCams[k],c.name,'Gimbal sem fio')});
+  const rob=p.crew.filter(c=>c.role==='Operador de robótica');if(rob.length)ptzs.forEach((g,k)=>setOp(g,rob[k%rob.length].name,/LIBRAS/.test(g.name)?'Libras · tripé com chroma':'Robótica'));
+  if(plan.lens)tripCams.slice(0,plan.lens.qty).forEach(g=>{camInfo(p,g).cs.lens=plan.lens.text});
   if(plan.cases.length)p.cases.push({id:uid(),name:'Itens do pedido (conferir)',items:plan.cases.map(c=>({id:uid(),qty:c.qty,name:c.name}))});
   if(b.items.some(it=>/cabos e acess/i.test(it.text)))p.cases.push({id:uid(),name:'Cabos e acessórios',items:[]});
-  p.client=f.cliente||'';p.venue=f.local||'';
-  p.notes=[r.num?`Pedido ${r.num}`:'',f.solicitante?`Solicitante: ${f.solicitante}`:'',f.duracao?`Duração diária: ${f.duracao}`:'',f.desmontagem&&!deD.length?`Desmontagem: ${f.desmontagem}`:'',b.title&&b.title!=='Transmissão'?`Bloco do pedido: ${b.title}`:''].filter(Boolean).join('\n');
+  p.client=F.cliente||'';p.venue=F.local||'';
+  p.notes=[r.num?`Pedido ${r.num}`:'',F.solicitante?`Solicitante: ${F.solicitante}`:'',F.duracao?`Duração diária: ${F.duracao}`:'',F.desmontagem&&!pdDates(F.desmontagem).length?`Desmontagem: ${F.desmontagem}`:'',F.folga?`Day off: ${F.folga}`:'',o.suffix?`Palco / área: ${o.suffix}`:''].filter(Boolean).join('\n');
   syncDate(p);p.v45=1;return {p,plan};
 }
 async function pdReadFile(f){
@@ -2462,20 +2504,22 @@ function importPedido(){
     $('#pdGo').onclick=()=>{const t=$('#pdTxt').value.trim();if(!t){toast('Cole o texto do pedido ou escolha o arquivo.');return}step2(t)}};
   const step2=(text,fname)=>{const r=parsePedido(text);const f=r.fields;
     if(!r.blocks.length){toast('Não encontrei a lista de equipamentos. Confira se o texto tem “Equipamentos e serviços”.');return}
-    const yr=((f.evento||'')+(f.montagem||'')).match(/20\d\d/);const evD=pdDates(f.evento||'',yr&&yr[0]),moD=pdDates(f.montagem||'',yr&&yr[0]);
-    const plans=r.blocks.map(pdPlan);const camModels=CATALOG['Câmeras'].concat(CATALOG['Sony Cinema Line / FX']||[]);const swModels=CATALOG['ATEM / Switchers'];
+    const plans=r.blocks.map(pdPlan);const camModels=CATALOG['Câmeras'].concat(CATALOG['Sony Cinema Line / FX']||[]);const swModels=CATALOG['ATEM / Switchers'];const multi=r.blocks.length>1;
+    const daysTxt=F=>{const ds=pdDays(F);return ds.length?ds.map(d=>`<span class="pill" style="font-size:11px;border-color:${DAYC[d.type]};color:${DAYC[d.type]}">${dayName(d)} ${esc(d.type)}</span>`).join(' '):'<span class="note" style="margin:0">sem datas</span>'};
     $('#modal').innerHTML=`<h3>Conferir pedido${fname?` · <span style="color:var(--mute);font-weight:500">${esc(fname)}</span>`:''}</h3>
     <div class="row"><label class="f" style="flex:2"><span>Evento</span><input class="in" id="pdN" value="${esc(f.nome||'')}"></label><label class="f"><span>Cliente</span><input class="in" value="${esc(f.cliente||'')}" disabled></label><label class="f"><span>Local</span><input class="in" value="${esc(f.local||'')}" disabled></label></div>
-    <p class="note" style="margin:-4px 0 10px">${r.num?`Pedido ${esc(r.num)} · `:''}${f.solicitante?`Solicitante ${esc(f.solicitante)} · `:''}Montagem/ensaio: ${moD.map(d=>dayName({date:d})).join(', ')||esc(f.montagem||'—')} · Evento: ${evD.map(d=>dayName({date:d})).join(', ')||esc(f.evento||'—')}${f.desmontagem?` · Desmontagem: ${esc(f.desmontagem)}`:''}${f.duracao?` · ${esc(f.duracao)}`:''}</p>
-    ${r.blocks.map((b,k)=>{const pl=plans[k];return `<div class="panel" style="margin-bottom:10px;padding:12px 14px"><div class="row" style="justify-content:space-between"><b>${esc(b.title)}</b><span class="note" style="margin:0">${pl.tripod+pl.handheld+pl.ptz+pl.gimbal} câmera(s) · ${b.crew.reduce((a,c)=>a+(c.qty||1),0)} pessoa(s)</span></div>
-      <table class="t" style="margin-top:8px"><tbody>${pl.lines.map(x=>`<tr><td style="width:48%;color:var(--soft)">${esc(x.src)}</td><td>→ ${/case/.test(x.what)?`<span style="color:var(--amber)">${esc(x.what)}</span>`:esc(x.what)}</td></tr>`).join('')}${b.crew.map(c=>`<tr><td style="color:var(--soft)">${fmtQ(c.qty)} ${esc(c.text)}</td><td>→ Equipe: ${esc(pdCrewRole(c.text)[0])}${c.qty>1?' ×'+c.qty:''}</td></tr>`).join('')}</tbody></table></div>`}).join('')}
-    <div class="row"><label class="f"><span>Modelo das câmeras</span><select class="in" id="pdCam">${camModels.map(m=>`<option ${m==='URSA Broadcast G2'?'selected':''}>${esc(m)}</option>`).join('')}</select></label><label class="f"><span>Switcher</span><select class="in" id="pdSw">${swModels.map(m=>`<option ${m===(plans[0].sw||'ATEM 2 M/E Constellation HD')?'selected':''}>${esc(m)}</option>`).join('')}</select></label></div>
-    ${r.blocks.length>1?`<p class="note">O pedido tem ${r.blocks.length} blocos. Cada um vira um projeto (“Evento · ${esc(r.blocks[1].title)}”), com o próprio patch e a mesma data e local.</p>`:''}
-    <p class="note">O gerador de patch monta as ligações, as metragens sugeridas, a gravação e o multiview. Cinegrafistas já ficam atribuídos às câmeras — troque pelos nomes reais em Equipe.</p>
-    <div class="row" style="justify-content:space-between;margin-top:12px"><button class="btn ghost" id="pdBack">Voltar</button><span class="row"><button class="btn ghost" id="pdC">Cancelar</button><button class="btn go" id="pdOk">Criar projeto${r.blocks.length>1?'s':''}</button></span></div>`;
+    <p class="note" style="margin:-4px 0 10px">${r.num?`Pedido ${esc(r.num)} · `:''}${f.solicitante?`Solicitante ${esc(f.solicitante)} · `:''}${f.duracao?esc(f.duracao)+' · ':''}${multi?`<b style="color:var(--text)">${r.blocks.length} palcos/áreas: cada um vira um projeto com o nome “evento · palco”.</b>`:''}</p>
+    <div style="max-height:56vh;overflow:auto;padding-right:4px">${r.blocks.map((b,k)=>{const pl=plans[k];const F=pdMerge(f,b.fields);return `<div class="panel" style="margin-bottom:10px;padding:12px 14px" data-b="${k}">
+      <div class="row" style="justify-content:space-between;align-items:flex-end;gap:10px">${multi?`<label class="f" style="margin:0;flex:1"><span>Palco / área</span><input class="in" data-bn value="${esc(b.title)}" style="font-weight:700"></label>`:`<b>${esc(b.title)}</b>`}<span class="note" style="margin:0;white-space:nowrap">${pl.tripod+pl.smpte+pl.handheld+pl.grua+pl.ptz+pl.libras+pl.gimbal} câmera(s) · ${b.crew.reduce((a,c)=>a+(c.qty||1),0)} pessoa(s)</span></div>
+      <div style="margin:8px 0 2px;display:flex;flex-wrap:wrap;gap:4px">${daysTxt(F)}</div>
+      <table class="t" style="margin-top:8px"><tbody>${pl.lines.map(x=>`<tr><td style="width:46%;color:var(--soft)">${esc(x.src)}</td><td>→ ${/case/.test(x.what)||/faltam/.test(x.what)?`<span style="color:var(--amber)">${esc(x.what)}</span>`:esc(x.what)}</td></tr>`).join('')}${b.crew.map(c=>`<tr><td style="color:var(--soft)">${fmtQ(c.qty)} ${esc(c.text)}</td><td>→ Equipe: ${esc(pdCrewRole(c.text)[0])}${c.qty>1?' ×'+c.qty:''}</td></tr>`).join('')}</tbody></table>
+      <div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>Modelo das câmeras</span><select class="in" data-bc>${camModels.map(m=>`<option ${m===(pl.camModel||'URSA Broadcast G2')?'selected':''}>${esc(m)}</option>`).join('')}</select></label><label class="f" style="margin:0"><span>Switcher</span><select class="in" data-bs>${swModels.map(m=>`<option ${m===(pl.sw||'ATEM 2 M/E Constellation HD')?'selected':''}>${esc(m)}</option>`).join('')}</select></label></div></div>`}).join('')}</div>
+    <p class="note">O gerador monta ligações, metragens sugeridas, gravação e multiview. Cinegrafistas, operadores de grua, gimbal e robótica já ficam atribuídos às câmeras — troque pelos nomes reais em Equipe.</p>
+    <div class="row" style="justify-content:space-between;margin-top:12px"><button class="btn ghost" id="pdBack">Voltar</button><span class="row"><button class="btn ghost" id="pdC">Cancelar</button><button class="btn go" id="pdOk">Criar ${multi?r.blocks.length+' projetos':'projeto'}</button></span></div>`;
     $('#pdBack').onclick=step1;$('#pdC').onclick=close;
-    $('#pdOk').onclick=()=>{const name=$('#pdN').value.trim()||f.nome||'Evento importado';const made=r.blocks.map((b,k)=>pdBuild(r,b,{name,suffix:r.blocks.length>1?b.title:'',cam:$('#pdCam').value,sw:$('#pdSw').value}).p);
-      made.forEach(p=>S.projects.push(p));S.current=made[0].id;save();histReset();close();render();go('dash');toast(`${made.length>1?made.length+' projetos criados':'Projeto criado'} a partir do pedido. Confira equipamentos, datas e equipe.`)}};
+    $('#pdOk').onclick=()=>{const name=$('#pdN').value.trim()||f.nome||'Evento importado';
+      const made=r.blocks.map((b,k)=>{const el=$(`[data-b="${k}"]`);const stage=multi?(el.querySelector('[data-bn]').value.trim()||b.title):'';return pdBuild(r,b,{name,suffix:stage,cam:el.querySelector('[data-bc]').value,sw:el.querySelector('[data-bs]').value}).p});
+      made.forEach(p=>S.projects.push(p));S.current=made[0].id;save();histReset();close();render();go('dash');toast(`${made.length>1?made.length+' projetos criados — um por palco':'Projeto criado'} a partir do pedido. Confira equipamentos, datas e equipe.`)}};
   const close=()=>{$('#modalBg').classList.remove('open');$('#modal').style.width=''};
   step1();$('#modalBg').classList.add('open');
 }
