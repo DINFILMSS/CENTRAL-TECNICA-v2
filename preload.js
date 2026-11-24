@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('ctDesktop', {
   openBackups: () => ipcRenderer.invoke('backup:folder'),
   info: () => ipcRenderer.sendSync('app:info'),
   checkUpdates: () => ipcRenderer.invoke('update:check'),
+  pdfText: (bytes) => ipcRenderer.invoke('pdf:text', bytes),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   openDownloads: () => ipcRenderer.invoke('update:downloads'),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, cmd) => cb(cmd)),

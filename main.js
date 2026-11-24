@@ -68,6 +68,19 @@ function startSync() {
 }
 function stopSync() { syncTimers.forEach(clearInterval); syncTimers = []; if (sync) { try { sync.leave(); } catch (e) {} } sync = null; }
 function syncInfo() { return { enabled: !!net.dir, dir: net.dir || '', user: net.user || os.userInfo().username, machine: MACHINE, ok: sync ? sync.ok : false, error: sync ? sync.lastError : '' }; }
+/* ---------- leitura de PDF (importar pedido) ---------- */
+ipcMain.handle('pdf:text', async (e, bytes) => {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: true, disableFontFace: true, isEvalSupported: false }).promise;
+  let out = '';
+  for (let i = 1; i <= doc.numPages; i++) {
+    const pg = await doc.getPage(i); const tc = await pg.getTextContent(); let lastY = null;
+    for (const it of tc.items) { if (lastY !== null && Math.abs(it.transform[5] - lastY) > 2) out += '\n'; out += it.str; lastY = it.transform[5]; if (it.hasEOL) out += '\n'; }
+    out += '\n';
+  }
+  try { await doc.destroy(); } catch (_) {}
+  return out;
+});
 ipcMain.on('sync:info', (e) => { e.returnValue = syncInfo(); });
 ipcMain.handle('sync:choose', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Escolha a pasta compartilhada', properties: ['openDirectory', 'createDirectory'], defaultPath: net.dir || (process.platform === 'win32' ? 'G:\\' : app.getPath('home')) });

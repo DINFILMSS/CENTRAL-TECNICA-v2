@@ -1,7 +1,7 @@
 {
   "name": "central-tecnica",
   "productName": "Central Técnica",
-  "version": "47.2.0",
+  "version": "48.0.0",
   "description": "Central Técnica by Don — pré-produção de broadcast",
   "author": "Don",
   "license": "UNLICENSED",
@@ -13,7 +13,8 @@
     "release": "npm run fonts && electron-builder --publish always"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "pdfjs-dist": "6.2.108"
   },
   "devDependencies": {
     "@fontsource-variable/archivo": "^5.0.0",

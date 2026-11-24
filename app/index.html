@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Central Técnica by Don · V47</title>
+<title>Central Técnica by Don · V48</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=JetBrains+Mono:wght@400;600;800&display=swap">
@@ -352,7 +352,7 @@ body.live .bar i{background:var(--tally)}
 <body>
 <div class="app">
   <header class="master">
-    <div class="brand" id="brandBtn" title="Versão e atualizações" style="cursor:pointer"><span class="lamp" aria-hidden="true"></span><div><b>CENTRAL TÉCNICA</b><small id="brandVer">by Don · V47</small></div></div>
+    <div class="brand" id="brandBtn" title="Versão e atualizações" style="cursor:pointer"><span class="lamp" aria-hidden="true"></span><div><b>CENTRAL TÉCNICA</b><small id="brandVer">by Don · V48</small></div></div>
     <div class="projsel">
       <select id="projSel" aria-label="Projeto atual"></select>
       <button class="iconbtn" id="newProj" title="Novo projeto">+ Projeto</button>
@@ -2015,13 +2015,14 @@ function modelCreateModal(m){
 R.models=()=>{
   const p=cur();S.templates=S.templates||[];
   $('#view').innerHTML=`<div class="vhead"><div><h1>Modelos de evento</h1><p>Comece um evento novo já com equipamentos, patch, racks, espelho, equipe e cronograma. Use um modelo pronto ou salve um evento seu como modelo para repetir.</p></div>
-  <div class="acts"><button class="btn go" id="mdSave">Salvar “${esc(p.name)}” como modelo</button></div></div>
+  <div class="acts"><button class="btn go" id="mdImp">Importar pedido</button><button class="btn" id="mdSave">Salvar “${esc(p.name)}” como modelo</button></div></div>
   <h3 style="margin:4px 0 10px">Seus modelos</h3>
   ${S.templates.length?`<div class="crew" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr));margin-bottom:22px">${S.templates.map(t=>`<div class="cc"><div class="nm">${esc(t.name)}</div><p class="note" style="margin:2px 0 6px">${esc(modelInfo(t))}</p>${t.desc?`<p style="font-size:13px;color:var(--soft);margin:0 0 8px">${esc(t.desc)}</p>`:''}${(t.pattern||[]).length?`<div class="row" style="gap:4px;margin-bottom:10px;flex-wrap:wrap">${t.pattern.map(([off,type,on])=>`<span class="pill" style="font-size:11px;border-color:${DAYC[type]};color:${DAYC[type]}">D${off+1} ${esc(type)}${on?' '+on:''}</span>`).join('')}</div>`:''}
     <div class="row"><button class="btn go sm" data-mu="${t.id}">Criar evento</button><button class="btn sm" data-mr="${t.id}">Renomear</button><button class="btn sm ghost" data-mup="${t.id}" title="Substitui o conteúdo do modelo pelo projeto aberto">Atualizar com o projeto aberto</button><button class="btn sm danger" data-md="${t.id}">✕</button></div></div>`).join('')}</div>`
   :`<div class="empty" style="margin-bottom:22px"><b>Nenhum modelo seu ainda</b>Monte um evento do jeito que vocês trabalham e clique em “Salvar como modelo”.</div>`}
   <h3 style="margin:4px 0 10px">Modelos prontos</h3><p class="note" style="margin:-4px 0 12px">Geram o patch completo com o Gerador, metragens sugeridas, espelho por dia e funções da equipe. Depois é só ajustar.</p>
   <div class="crew" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr))">${BUILTIN_MODELS.map(m=>`<div class="cc"><div class="nm">${esc(m.name)}</div><p class="note" style="margin:2px 0 6px">${esc(modelInfo(m))}</p><p style="font-size:13px;color:var(--soft);margin:0 0 8px">${esc(m.desc)}</p><div class="row" style="gap:4px;margin-bottom:10px;flex-wrap:wrap">${m.days.map(([off,type,on])=>`<span class="pill" style="font-size:11px;border-color:${DAYC[type]};color:${DAYC[type]}">D${off+1} ${esc(type)}${on?' '+on:''}</span>`).join('')}</div><button class="btn go sm" data-mb="${m.id}">Criar evento</button></div>`).join('')}</div>`;
+  $('#mdImp').onclick=importPedido;
   $$('[data-mb]').forEach(b=>b.onclick=()=>modelCreateModal(BUILTIN_MODELS.find(m=>m.id===b.dataset.mb)));
   const T=id=>S.templates.find(t=>t.id===id);
   $$('[data-mu]').forEach(b=>b.onclick=()=>modelCreateModal(T(b.dataset.mu)));
@@ -2348,6 +2349,137 @@ function bindAddr(p){
   $('#e_map')&&($('#e_map').onclick=()=>openURL(mapsURL({geo:addrPick!==undefined?addrPick:p.geo,address:inp.value,venue:$('#e_venue').value})));
 }
 
+/* =========================================================
+   V48 — importar pedido / proposta comercial (PDF, Word ou texto)
+   ========================================================= */
+const PD_FIELDS=[['cliente',/^cliente$/i],['solicitante',/^solicitante$/i],['montagem',/^montagem(\s*\/\s*ensaio)?$|^ensaio$/i],['evento',/^evento$|^data(s)?( do evento)?$/i],['desmontagem',/^desmontagem$/i],['local',/^local$/i],['duracao',/^dura[çc][ãa]o( di[áa]ria)?$|^hor[áa]rio$/i]];
+function pdLines(text){return String(text).replace(/\r/g,'').split('\n').map(l=>l.replace(/[ \t]+/g,' ').replace(/\s+/g,' ').trim()).filter(l=>l&&!/^\d+\s*$/.test(l)&&!/^p[áa]gina \d+/i.test(l))}
+function pdDates(s,year){
+  s=String(s);const yr=(s.match(/\b(20\d\d)\b/)||[])[1]||year||new Date().getFullYear();const out=[];
+  const full=[...s.matchAll(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/g)];
+  // "03 e 04/12/2026", "03, 04 e 05/12", "03 a 05/12/2026"
+  const m=s.match(/^(.*?)(\d{1,2})\/(\d{1,2})/);
+  if(m){const mon=+m[3];const before=m[1];const nums=[...before.matchAll(/\b(\d{1,2})\b/g)].map(x=>+x[1]).filter(d=>d>=1&&d<=31);
+    if(/\d\s*(a|até|-|–)\s*$/.test(before.trim())&&nums.length){for(let d=nums[nums.length-1];d<=+m[2];d++)out.push([d,mon])}
+    else{nums.forEach(d=>out.push([d,mon]));}}
+  full.forEach(x=>out.push([+x[1],+x[2],x[3]]));
+  const seen=new Set();return out.map(([d,mo,y])=>{const Y=y?(String(y).length===2?2000+ +y:+y):+yr;return `${Y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`}).filter(k=>!isNaN(Date.parse(k))&&!seen.has(k)&&seen.add(k)).sort()}
+function pdItem(l){const m=l.match(/^(\d{1,3})\s*(?:x|×|un\.?|und\.?)?\s+(.+?)[;.,]?$/i);return m?{qty:+m[1],text:m[2].replace(/[;.]$/,'').trim()}:{qty:0,text:l.replace(/[;.]$/,'').trim()}}
+function parsePedido(text){
+  const L=pdLines(text);const r={fields:{},num:'',blocks:[],raw:L};let i=0;
+  const head=L.findIndex(l=>/^evento:?$/i.test(l));
+  const numL=L.find(l=>/\bV\d+\b|\b\d{3,5}[_\-/]\d{2}\b/.test(l)&&l.length<40);if(numL)r.num=numL;
+  if(head>=0&&L[head+1]&&!/:/.test(L[head+1]))r.fields.nome=L[head+1];
+  L.forEach((l,k)=>{const m=l.match(/^([^:]{2,40}):\s*(.*)$/);if(!m)return;const key=PD_FIELDS.find(([,re])=>re.test(m[1].trim()));if(!key)return;let v=m[2].trim();if(!v&&L[k+1]&&!/:/.test(L[k+1]))v=L[k+1];
+    if(key[0]==='evento'&&!/\d{1,2}\s*\/\s*\d{1,2}/.test(v)){if(!r.fields.nome)r.fields.nome=v;return}
+    if(r.fields[key[0]]==null)r.fields[key[0]]=v});
+  // blocos: começam no título que vem antes de "Equipamentos e serviços"
+  let cur=null,mode=null;
+  for(i=0;i<L.length;i++){const l=L[i];
+    if(/^equipamentos( e servi[çc]os)?:?$/i.test(l)){if(!cur||cur.items.length){cur={title:(L[i-1]&&!/:/.test(L[i-1])&&!/^\d/.test(L[i-1])&&L[i-1].length<60?L[i-1]:'Transmissão'),items:[],crew:[]};r.blocks.push(cur)}mode='eq';continue}
+    if(/^equipe( composta por| t[ée]cnica)?:?$/i.test(l)){if(!cur){cur={title:'Transmissão',items:[],crew:[]};r.blocks.push(cur)}mode='crew';continue}
+    if(!cur||!mode)continue;
+    if(/^[^:]{2,40}:\s*\S/.test(l)&&PD_FIELDS.some(([,re])=>re.test(l.split(':')[0].trim())))continue;
+    // título de novo bloco (palco, sala...): linha curta sem número seguida de "Equipamentos"
+    if(L[i+1]&&/^equipamentos( e servi[çc]os)?:?$/i.test(L[i+1])&&!/^\d/.test(l)){mode=null;continue}
+    if(/^(valor|investimento|condi[çc][õo]es|observa[çc][õo]es|total|forma de pagamento|validade)/i.test(l)){mode=null;continue}
+    const it=pdItem(l);
+    if(mode==='crew'){if(it.qty)cur.crew.push(it);continue}
+    const last=cur.items[cur.items.length-1];
+    if(last&&last.open&&it.qty&&last.subQty+it.qty<=last.qty){last.subs.push(it);last.subQty+=it.qty;if(last.subQty>=last.qty)last.open=false;continue}
+    if(last)last.open=false;
+    it.subs=[];it.subQty=0;it.open=/sendo:?$|:$/.test(l)&&it.qty>0;it.text=it.text.replace(/,?\s*sendo:?$/i,'').replace(/:$/,'');cur.items.push(it);
+  }
+  return r;
+}
+const PD_SW=[[/4\s*m\s*\/?\s*e/i,'ATEM 4 M/E Constellation HD'],[/2\s*m\s*\/?\s*e/i,'ATEM 2 M/E Constellation HD'],[/1\s*m\s*\/?\s*e/i,'ATEM 1 M/E Constellation HD']];
+function pdPick(re){return Object.values(CATALOG).flat().find(m=>re.test(m))}
+// transforma os itens do pedido em opções do gerador + extras
+function pdPlan(b){
+  const plan={tripod:0,gimbal:0,ptz:0,handheld:0,sw:null,vh:false,mv:false,rec:false,iso:false,stream:false,gc:false,intercom:false,cases:[],lines:[],crew:b.crew};
+  const add=(it,what)=>plan.lines.push({src:`${it.qty?String(it.qty).padStart(2,'0')+' ':''}${it.text}`,what});
+  b.items.forEach(it=>{const t=it.text,q=it.qty||1;
+    if(/c[âa]mera|filmadora/i.test(t)&&!/control|ccu|rcp/i.test(t)){
+      const parts=it.subs.length?it.subs:[it];const desc=[];
+      parts.forEach(s=>{const n=s.qty||q;
+        if(/gimbal|estabiliz|steadicam|ronin|sem fio|wireless|rf\b/i.test(s.text)){plan.gimbal+=n;desc.push(`${n} gimbal sem fio`)}
+        else if(/ptz|rob[óo]tica|remota/i.test(s.text)){plan.ptz+=n;desc.push(`${n} PTZ`)}
+        else if(/ombro|m[ãa]o|handheld/i.test(s.text)){plan.handheld+=n;desc.push(`${n} no ombro`)}
+        else{plan.tripod+=n;desc.push(`${n} em tripé`)}});
+      add(it,'Câmeras: '+desc.join(', '));return}
+    if(/switcher|mesa de corte|mixer de v[ií]deo|corte/i.test(t)){plan.sw=(PD_SW.find(([re])=>re.test(t))||[0,'ATEM 2 M/E Constellation HD'])[1];add(it,'Switcher: '+plan.sw);return}
+    if(/multiview|monitora/i.test(t)){plan.mv=true;add(it,'Multiview e monitores da direção');return}
+    if(/comunica[çc][ãa]o|intercom|talk ?back/i.test(t)){plan.intercom=true;add(it,'Intercom da equipe');return}
+    if(/grava[çc]/i.test(t)){if(/iso/i.test(t))plan.iso=true;else plan.rec=true;add(it,plan.iso?'Gravação ISO de cada câmera':'Gravação do PGM');return}
+    if(/streaming|transmiss[ãa]o (online|ao vivo)|youtube|live|srt|rtmp/i.test(t)){plan.stream=true;add(it,'Streaming');return}
+    if(/videohub|matriz|roteador/i.test(t)){plan.vh=true;add(it,'Matriz de vídeo (Videohub)');return}
+    if(/gc|gerador de caracteres|vmix|playback|vinheta|replay/i.test(t)){plan.gc=true;add(it,'vMix para GC / VT');return}
+    if(/equipe para|montagem\/desmontagem|operação$/i.test(t)){add(it,'Equipe (ver lista abaixo)');return}
+    if(/cabos e acess/i.test(t)){add(it,'Case “Cabos e acessórios” para completar');return}
+    plan.cases.push({qty:q,name:t+(it.subs.length?' — '+it.subs.map(s=>`${fmtQ(s.qty)} ${s.text}`).join(', '):'')});add(it,'Vai para o case “Itens do pedido”')});
+  return plan;
+}
+function pdCrewRole(t){if(/^dtv$|diretor de tv|dire[çc][ãa]o de tv/i.test(t))return ['Diretor de TV','CH1 Direção'];if(/cinegraf|c[âa]mera ?man|operador de c[âa]mera/i.test(t))return ['Cinegrafista','CH3 Câmeras'];if(/gimbal/i.test(t))return ['Operador de gimbal','CH3 Câmeras'];if(/assist/i.test(t))return ['Assistente','CH2 Técnica'];if(/[áa]udio|som/i.test(t))return ['Áudio','CH4 Áudio'];if(/gc|vt|vmix|replay/i.test(t))return [t,'CH1 Direção'];if(/t[ée]cnic|engenh/i.test(t))return ['Técnico','CH2 Técnica'];return [t.replace(/s$/,''),'CH2 Técnica']}
+function pdBuild(r,b,o){
+  const f=r.fields,plan=pdPlan(b);const nm=(o.name||f.nome||'Evento importado')+(o.suffix?' · '+o.suffix:'');
+  const p=newProject(nm);normalize(p);
+  const ncam=plan.tripod+plan.handheld;
+  generatePatch(p,{...WZ_BASE,sw:o.sw||plan.sw||'ATEM 2 M/E Constellation HD',cam:o.cam||'URSA Broadcast G2',ncam:Math.max(ncam,0),nptz:plan.ptz,ptz:pdPick(/AW-UE150/)||WZ_BASE.ptz,vmix:plan.gc,vh:plan.vh||plan.iso,isoRec:plan.iso?ncam+plan.ptz+plan.gimbal:0,pgmRec:plan.rec||plan.iso,stream:plan.stream,ret:true,ref:false,mvmon:true,net:true,dist:50,mode:'replace'});
+  if(plan.gimbal){const k=BUILTIN_KITS.find(k=>k.id==='k-wl');insertKit(p,k,plan.gimbal,true);let n=ncam+plan.ptz;p.gear.filter(g=>/^CAM RF/.test(g.name)).forEach(g=>{n++;g.name=`CAM ${String(n).padStart(2,'0')} GIMBAL`});autoLabels(p)}
+  if(plan.intercom&&!p.gear.some(g=>/Intercom/.test(g.model))){const ic=pdPick(/^Intercom \(gen/);if(ic){const g=addGearTo(p,ic,'COM 01');const ns=p.gear.find(x=>/Switch de rede/.test(x.model));const oi=g.outs.findIndex(x=>x.type==='Rede');if(ns&&oi>=0){const ii=freeIn(p,ns,'Rede');if(ii>=0)linkLen(p,g,oi,ns,ii,5)}}}
+  autoLabels(p);autoLayout(p);suggestAll(p);
+  // datas
+  const yr=((f.evento||'')+(f.montagem||'')).match(/20\d\d/);const evD=pdDates(f.evento||'',yr&&yr[0]),moD=pdDates(f.montagem||'',yr&&yr[0]),deD=pdDates(f.desmontagem||'',yr&&yr[0]);
+  const all=[...new Set([...moD,...evD,...deD])].sort();
+  p.days=all.map(d=>{const ev=evD.includes(d),mo=moD.includes(d),de=deD.includes(d);const type=ev?'Evento':mo?(/ensaio/i.test(f.montagem||'')&&!/montagem/i.test(f.montagem||'')?'Ensaio':'Montagem'):'Desmontagem';
+    const label=[mo&&ev?'Montagem/ensaio + evento':'',ev&&d===evD[evD.length-1]&&f.desmontagem&&!deD.length?'Desmontagem '+f.desmontagem.toLowerCase():''].filter(Boolean).join(' · ');return {id:uid(),date:d,type,onair:'',label}});
+  // rundown vazio por dia de evento, equipe e itens
+  p.rundown=[];
+  const counts={};p.crew=[];plan.crew.forEach(c=>{const [role,ic]=pdCrewRole(c.text);for(let k=0;k<(c.qty||1);k++){counts[role]=(counts[role]||0)+1;p.crew.push({id:uid(),name:(c.qty||1)>1?`${role} ${counts[role]}`:role,role,ic,radio:'',phone:''})}});
+  // cinegrafistas nas câmeras de tripé, operador de gimbal na gimbal
+  const cams=crewCamList(p);const camsT=cams.filter(g=>!/GIMBAL/.test(g.name)&&!/PTZ/.test(g.name)),camsG=cams.filter(g=>/GIMBAL/.test(g.name));
+  p.crew.filter(c=>c.role==='Cinegrafista').forEach((c,k)=>{if(camsT[k]){const x=camInfo(p,camsT[k]).cs;x.op=c.name;x.pos=x.pos||'Tripé'}});
+  p.crew.filter(c=>c.role==='Operador de gimbal').forEach((c,k)=>{if(camsG[k]){const x=camInfo(p,camsG[k]).cs;x.op=c.name;x.pos=x.pos||'Gimbal sem fio'}});
+  if(plan.cases.length)p.cases.push({id:uid(),name:'Itens do pedido (conferir)',items:plan.cases.map(c=>({id:uid(),qty:c.qty,name:c.name}))});
+  if(b.items.some(it=>/cabos e acess/i.test(it.text)))p.cases.push({id:uid(),name:'Cabos e acessórios',items:[]});
+  p.client=f.cliente||'';p.venue=f.local||'';
+  p.notes=[r.num?`Pedido ${r.num}`:'',f.solicitante?`Solicitante: ${f.solicitante}`:'',f.duracao?`Duração diária: ${f.duracao}`:'',f.desmontagem&&!deD.length?`Desmontagem: ${f.desmontagem}`:'',b.title&&b.title!=='Transmissão'?`Bloco do pedido: ${b.title}`:''].filter(Boolean).join('\n');
+  syncDate(p);p.v45=1;return {p,plan};
+}
+async function pdReadFile(f){
+  const ext=(f.name.split('.').pop()||'').toLowerCase();
+  if(ext==='docx'){const z=await unzip(await f.arrayBuffer());return (await docxParas(z)).map(x=>x.text).join('\n')}
+  if(ext==='pdf'){if(DESK&&DESK.pdfText)return await DESK.pdfText(new Uint8Array(await f.arrayBuffer()));throw new Error('Na versão de navegador não dá para ler PDF. Abra o PDF, selecione tudo (Ctrl+A), copie e cole o texto aqui — ou use o app instalado.')}
+  return await f.text();
+}
+function importPedido(){
+  $('#modal').style.width='min(860px,96vw)';
+  const step1=()=>{$('#modal').innerHTML=`<h3>Importar pedido</h3><p class="sub" style="margin:0 0 12px">Escolha a proposta comercial (PDF${DESK?'':' no app instalado'}, Word ou texto) ou cole o texto dela. O app lê evento, cliente, local, datas, equipamentos e equipe, mostra o que entendeu e só cria o projeto quando você confirmar.</p>
+    <div class="row" style="margin-bottom:10px"><button class="btn go" id="pdFile">Escolher arquivo…</button><span class="note" style="margin:0">ou cole abaixo</span><input type="file" id="pdIn" accept=".pdf,.docx,.txt" hidden></div>
+    <textarea class="in" id="pdTxt" style="min-height:240px;font-size:12.5px" placeholder="Evento:\nVW – MM PR 2026\nCliente: Hype\n…"></textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost" id="pdC">Cancelar</button><button class="btn go" id="pdGo">Ler pedido</button></div>`;
+    $('#pdC').onclick=close;$('#pdFile').onclick=()=>{const i=$('#pdIn');i.value='';i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const t=await pdReadFile(f);$('#pdTxt').value=t;step2(t,f.name)}catch(e){toast(e.message||'Não consegui ler o arquivo.')}};i.click()};
+    $('#pdGo').onclick=()=>{const t=$('#pdTxt').value.trim();if(!t){toast('Cole o texto do pedido ou escolha o arquivo.');return}step2(t)}};
+  const step2=(text,fname)=>{const r=parsePedido(text);const f=r.fields;
+    if(!r.blocks.length){toast('Não encontrei a lista de equipamentos. Confira se o texto tem “Equipamentos e serviços”.');return}
+    const yr=((f.evento||'')+(f.montagem||'')).match(/20\d\d/);const evD=pdDates(f.evento||'',yr&&yr[0]),moD=pdDates(f.montagem||'',yr&&yr[0]);
+    const plans=r.blocks.map(pdPlan);const camModels=CATALOG['Câmeras'].concat(CATALOG['Sony Cinema Line / FX']||[]);const swModels=CATALOG['ATEM / Switchers'];
+    $('#modal').innerHTML=`<h3>Conferir pedido${fname?` · <span style="color:var(--mute);font-weight:500">${esc(fname)}</span>`:''}</h3>
+    <div class="row"><label class="f" style="flex:2"><span>Evento</span><input class="in" id="pdN" value="${esc(f.nome||'')}"></label><label class="f"><span>Cliente</span><input class="in" value="${esc(f.cliente||'')}" disabled></label><label class="f"><span>Local</span><input class="in" value="${esc(f.local||'')}" disabled></label></div>
+    <p class="note" style="margin:-4px 0 10px">${r.num?`Pedido ${esc(r.num)} · `:''}${f.solicitante?`Solicitante ${esc(f.solicitante)} · `:''}Montagem/ensaio: ${moD.map(d=>dayName({date:d})).join(', ')||esc(f.montagem||'—')} · Evento: ${evD.map(d=>dayName({date:d})).join(', ')||esc(f.evento||'—')}${f.desmontagem?` · Desmontagem: ${esc(f.desmontagem)}`:''}${f.duracao?` · ${esc(f.duracao)}`:''}</p>
+    ${r.blocks.map((b,k)=>{const pl=plans[k];return `<div class="panel" style="margin-bottom:10px;padding:12px 14px"><div class="row" style="justify-content:space-between"><b>${esc(b.title)}</b><span class="note" style="margin:0">${pl.tripod+pl.handheld+pl.ptz+pl.gimbal} câmera(s) · ${b.crew.reduce((a,c)=>a+(c.qty||1),0)} pessoa(s)</span></div>
+      <table class="t" style="margin-top:8px"><tbody>${pl.lines.map(x=>`<tr><td style="width:48%;color:var(--soft)">${esc(x.src)}</td><td>→ ${/case/.test(x.what)?`<span style="color:var(--amber)">${esc(x.what)}</span>`:esc(x.what)}</td></tr>`).join('')}${b.crew.map(c=>`<tr><td style="color:var(--soft)">${fmtQ(c.qty)} ${esc(c.text)}</td><td>→ Equipe: ${esc(pdCrewRole(c.text)[0])}${c.qty>1?' ×'+c.qty:''}</td></tr>`).join('')}</tbody></table></div>`}).join('')}
+    <div class="row"><label class="f"><span>Modelo das câmeras</span><select class="in" id="pdCam">${camModels.map(m=>`<option ${m==='URSA Broadcast G2'?'selected':''}>${esc(m)}</option>`).join('')}</select></label><label class="f"><span>Switcher</span><select class="in" id="pdSw">${swModels.map(m=>`<option ${m===(plans[0].sw||'ATEM 2 M/E Constellation HD')?'selected':''}>${esc(m)}</option>`).join('')}</select></label></div>
+    ${r.blocks.length>1?`<p class="note">O pedido tem ${r.blocks.length} blocos. Cada um vira um projeto (“Evento · ${esc(r.blocks[1].title)}”), com o próprio patch e a mesma data e local.</p>`:''}
+    <p class="note">O gerador de patch monta as ligações, as metragens sugeridas, a gravação e o multiview. Cinegrafistas já ficam atribuídos às câmeras — troque pelos nomes reais em Equipe.</p>
+    <div class="row" style="justify-content:space-between;margin-top:12px"><button class="btn ghost" id="pdBack">Voltar</button><span class="row"><button class="btn ghost" id="pdC">Cancelar</button><button class="btn go" id="pdOk">Criar projeto${r.blocks.length>1?'s':''}</button></span></div>`;
+    $('#pdBack').onclick=step1;$('#pdC').onclick=close;
+    $('#pdOk').onclick=()=>{const name=$('#pdN').value.trim()||f.nome||'Evento importado';const made=r.blocks.map((b,k)=>pdBuild(r,b,{name,suffix:r.blocks.length>1?b.title:'',cam:$('#pdCam').value,sw:$('#pdSw').value}).p);
+      made.forEach(p=>S.projects.push(p));S.current=made[0].id;save();histReset();close();render();go('dash');toast(`${made.length>1?made.length+' projetos criados':'Projeto criado'} a partir do pedido. Confira equipamentos, datas e equipe.`)}};
+  const close=()=>{$('#modalBg').classList.remove('open');$('#modal').style.width=''};
+  step1();$('#modalBg').classList.add('open');
+}
+
 /* ---------- sugestão de metragem ---------- */
 const STD_LEN={SDI:[0.5,1,2,3,5,10,15,20,25,30,40,50,75,100],Fibra:[25,50,100,150,200,300,500],HDMI:[0.5,1,2,3,5,10,15],Rede:[0.5,1,2,3,5,10,15,20,30,50,75,100],'Áudio':[1,2,3,5,10,15,20,30,50,100],REF:[1,2,3,5,10,15,20,30,50,100]};
 const FIELD_CATS=['Câmeras','Sony Cinema Line / FX','PTZ Panasonic / Sony'];
@@ -2613,6 +2745,7 @@ function palFill(q){
     ...S.projects.filter(x=>x!==p).map(x=>({t:'Abrir projeto: '+x.name,s:'Projeto',run:()=>{S.current=x.id;save();render()}})),
     {t:'Ligar / desligar ON AIR',s:'Ação',run:()=>$('#onair').click()},
     {t:'Editar dados do evento',s:'Ação',run:()=>{go('dash');editEvent()}},
+    {t:'Importar pedido (proposta comercial)',s:'Ação',run:()=>importPedido()},
     {t:'Baixar backup',s:'Ação',run:()=>download(`central-tecnica-v41-backup.json`,JSON.stringify(S),'application/json')}];
   palItems=all.filter(i=>(i.t+' '+i.s).toLowerCase().includes(q)).slice(0,12);palIdx=0;drawPal();
 }
@@ -4058,7 +4191,7 @@ function updBar(v){let b=$('#updBar');if(!b){b=document.createElement('div');b.i
   $('#updGo').onclick=()=>{try{DESK.installUpdate()}catch(e){}};$('#updX').onclick=()=>b.remove()}
 function aboutBox(){
   const canUpd=!!(DESK&&DESK.checkUpdates);
-  $('#modal').innerHTML=`<h3>Central Técnica by Don</h3><p class="sub" style="margin:0 0 14px">${APPV?`Aplicativo instalado · versão <b>${esc(APPV)}</b>`:'Versão de navegador · V47'}</p>
+  $('#modal').innerHTML=`<h3>Central Técnica by Don</h3><p class="sub" style="margin:0 0 14px">${APPV?`Aplicativo instalado · versão <b>${esc(APPV)}</b>`:'Versão de navegador · V48'}</p>
   ${canUpd?`<p style="font-size:13.5px;color:var(--soft);margin:0 0 14px">O app procura versão nova sozinho ao abrir e a cada 4 horas. No Windows ela é baixada e instalada ao reiniciar; no Mac abre a página de download.</p><div class="row" style="justify-content:space-between"><button class="btn" id="abDl">Página de downloads</button><span class="row"><button class="btn ghost" id="abC">Fechar</button><button class="btn go" id="abUp">Procurar atualizações agora</button></span></div>`
   :`<p style="font-size:13.5px;color:var(--soft);margin:0 0 14px">${DESK?'Esta instalação é anterior à atualização automática. Baixe a versão mais nova na página de downloads e instale por cima — os projetos continuam salvos.':'Esta é a versão de navegador: ela sempre abre na versão mais recente.'}</p><div class="row" style="justify-content:flex-end"><button class="btn ghost" id="abC">Fechar</button></div>`}`;
   $('#modalBg').classList.add('open');const close=()=>$('#modalBg').classList.remove('open');$('#abC').onclick=close;
