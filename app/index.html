@@ -181,10 +181,10 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
 .node-h{cursor:move}
 .node .pin{cursor:crosshair}
 .node .pin:hover circle{stroke-width:3}
-.cable{fill:none;stroke-width:2.4;stroke-linecap:round;cursor:pointer}
+.cable{fill:none;stroke-width:var(--cw,2.4);stroke-linecap:round;stroke-linejoin:round;cursor:pointer}
 .cable.dim{opacity:.12}
-.cable:hover{stroke-width:4}
-.cable.sel{stroke-width:4.5;filter:drop-shadow(0 0 6px currentColor)}
+.cable:hover{stroke-width:calc(var(--cw,2.4) * 1.7)}
+.cable.sel{stroke-width:calc(var(--cw,2.4) * 2)}
 .node.dim{opacity:.22}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--soft)}
 .legend span{display:flex;align-items:center;gap:6px}
@@ -338,7 +338,7 @@ body.live .bar i{background:var(--tally)}
 .case footer{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
 .updbar{position:fixed;right:18px;bottom:18px;z-index:250;display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--phos);border-radius:var(--r1);padding:10px 12px 10px 16px;box-shadow:0 12px 40px rgba(0,0,0,.55);font-size:13.5px}
 .updbar b{color:var(--phos)}
-.netpill[hidden]{display:none!important}.shp{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 14px}.shpb{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--soft);cursor:pointer;font:inherit}.shpb small{font-size:10px;line-height:1.1;text-align:center}.shpb:hover{color:var(--text);border-color:var(--soft)}.shpb.on{color:#ffb21e;border-color:#ffb21e;background:rgba(255,178,30,.08)}.shpb:focus-visible{outline:2px solid var(--acc,#2eff7e);outline-offset:2px}
+.netpill[hidden]{display:none!important}.shp{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 14px}.shpb{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--soft);cursor:pointer;font:inherit}.shpb small{font-size:10px;line-height:1.1;text-align:center}.shpb:hover{color:var(--text);border-color:var(--soft)}.rot{cursor:grab}.rot:hover circle{fill:#3a2a08}.shpb.on{color:#ffb21e;border-color:#ffb21e;background:rgba(255,178,30,.08)}.shpb:focus-visible{outline:2px solid var(--acc,#2eff7e);outline-offset:2px}
 
 .netpill{gap:8px;font-size:12.5px;max-width:280px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .netpill i{width:8px;height:8px;border-radius:50%;background:var(--phos);flex:none;box-shadow:0 0 8px var(--phos)}
@@ -813,7 +813,13 @@ function nodeH(g){const n=Math.max(visN(g,'ins'),visN(g,'outs'),1);return PH+n*P
 function visN(g,s){return g.expanded?g[s].length:Math.min(PMAX,g[s].length)}
 function needsMore(g){return g.ins.length>PMAX||g.outs.length>PMAX}
 function portXY(g,side,pid){const arr=g[side];let i=arr.findIndex(p=>p.id===pid);if(i<0)return null;const n=visN(g,side);if(i>=n)i=n-1;return [g.x+(side==='outs'?PW:0),g.y+PH+i*PR+PR/2+4]}
-function cablePath(a,b){const dx=Math.max(60,Math.abs(b[0]-a[0])*.5);return `M${a[0]},${a[1]} C${a[0]+dx},${a[1]} ${b[0]-dx},${b[1]} ${b[0]},${b[1]}`}
+function cablePath(a,b,ga,gb){
+  if(ga&&gb&&b[0]<a[0]+40){/* cabo voltando (saída à direita do destino): gancho curto, corre por fora dos dois equipamentos */
+    const ha=nodeH(ga),hb=nodeH(gb),h=Math.min(46,24+Math.abs(b[1]-a[1])*.08),r=Math.min(18,h*.6);
+    let my;if(gb.y>ga.y+ha+8)my=(ga.y+ha+gb.y)/2;else if(gb.y+hb<ga.y-8)my=(gb.y+hb+ga.y)/2;else my=Math.max(ga.y+ha,gb.y+hb)+22;
+    const sa=my>a[1]?1:-1,sb=b[1]>my?1:-1,xa=a[0]+h,xb=b[0]-h;
+    return `M${a[0]},${a[1]} H${xa-r} Q${xa},${a[1]} ${xa},${a[1]+sa*r} V${my-sa*r} Q${xa},${my} ${xa-r},${my} H${xb+r} Q${xb},${my} ${xb},${my+sb*r} V${b[1]-sb*r} Q${xb},${b[1]} ${xb+r},${b[1]} H${b[0]}`}
+  const dx=Math.max(60,Math.min(260,Math.abs(b[0]-a[0])*.5));return `M${a[0]},${a[1]} C${a[0]+dx},${a[1]} ${b[0]-dx},${b[1]} ${b[0]},${b[1]}`}
 function traceFrom(p,startId){
   const seen=new Set([startId]),links=new Set(),order=[[startId]];let frontier=[startId];
   while(frontier.length){const nx=[];for(const id of frontier)for(const l of p.links)if(l.a===id&&!seen.has(l.b)){seen.add(l.b);links.add(l.id);nx.push(l.b)}else if(l.a===id)links.add(l.id);if(nx.length)order.push(nx);frontier=nx}
@@ -823,7 +829,7 @@ R.patch=()=>{
   const p=cur();
   $('#view').innerHTML=`
   <div class="vhead"><div><h1>Patch de sinais</h1><p>Clique numa saída e depois numa entrada para ligar. Arraste o cabeçalho para mover; arraste o fundo para navegar e use a roda do mouse para zoom.</p></div>
-  <div class="acts"><button class="btn" id="pAuto">Organizar em colunas</button><button class="btn" id="pFit">Enquadrar tudo</button><button class="btn" id="pCsv">Exportar ligações CSV</button></div></div>
+  <div class="acts"><button class="btn" id="pAuto" title="Organiza pelo caminho do sinal: da origem (esquerda) ao destino (direita)">Organizar pelo sinal</button><button class="btn" id="pFit">Enquadrar tudo</button><button class="btn" id="pCsv">Exportar ligações CSV</button></div></div>
   <div class="toolbar">
     <span style="font-size:12.5px;color:var(--soft)">Tipo do cabo</span>
     <div class="seg" id="pTypes"><button data-t="auto" class="${pType==='auto'?'on':''}">Pela porta</button>${SIGS.map(s=>`<button data-t="${s}" class="${pType===s?'on':''}"><i style="background:${SIG[s]}"></i>${s}</button>`).join('')}</div>
@@ -855,12 +861,30 @@ R.patch=()=>{
   svg.addEventListener('wheel',e=>{e.preventDefault();const r=svg.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;const k2=clamp(pv.k*(e.deltaY<0?1.1:1/1.1),.2,2.5);pv.x=mx-(mx-pv.x)*k2/pv.k;pv.y=my-(my-pv.y)*k2/pv.k;pv.k=k2;applyPV()},{passive:false});
   if(!R.patch._fitted){R.patch._fitted=true;setTimeout(fitPatch,0)}
 };
-function applyPV(){const w=$('#pWorld');if(w)w.setAttribute('transform',`translate(${pv.x},${pv.y}) scale(${pv.k})`)}
+function applyPV(){const w=$('#pWorld');if(w){w.setAttribute('transform',`translate(${pv.x},${pv.y}) scale(${pv.k})`);w.style.setProperty('--cw',Math.max(2.4,1.6/pv.k).toFixed(2))}}
 function fitPatch(){const p=cur();const svg=$('#pSvg');if(!svg||!p.gear.length)return;const r=svg.getBoundingClientRect();let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;p.gear.forEach(g=>{x0=Math.min(x0,g.x);y0=Math.min(y0,g.y);x1=Math.max(x1,g.x+PW);y1=Math.max(y1,g.y+nodeH(g))});const k=clamp(Math.min((r.width-60)/(x1-x0),(r.height-60)/(y1-y0)),.2,1.2);pv={k,x:(r.width-(x1-x0)*k)/2-x0*k,y:(r.height-(y1-y0)*k)/2-y0*k};applyPV()}
 function autoLayout(p){
-  const rank=g=>{const s=SHORT(g.model);if(s==='CAM')return 0;if(/Wireless|Conversores/.test(g.cat)||/vMix|Playback|GC/.test(g.model))return 1;if(s==='VH')return 2;if(s==='ATEM'||/LED/.test(g.cat))return 3;return 4};
-  const cols={};p.gear.forEach(g=>{(cols[rank(g)]=cols[rank(g)]||[]).push(g)});
-  Object.entries(cols).forEach(([c,arr])=>{let y=40;arr.forEach(g=>{g.x=40+c*320;g.y=y;y+=nodeH(g)+30})});
+  /* organiza pelo fluxo do sinal: cada equipamento fica uma coluna à direita de quem o alimenta (rede não conta, é bidirecional) */
+  const G=p.gear,ids=new Set(G.map(g=>g.id)),byId=Object.fromEntries(G.map(g=>[g.id,g])),isRet=l=>l.type==='REF'||/\bRET|RETORNO|RETURN|\bREF\b|PGM IN/i.test((byId[l.b].ins.find(x=>x.id===l.bp)||{}).name||''),sig=p.links.filter(l=>l.type!=='Rede'&&l.a!==l.b&&ids.has(l.a)&&ids.has(l.b)&&!isRet(l));
+  const pre={},suc={};G.forEach(g=>{pre[g.id]=[];suc[g.id]=[]});sig.forEach(l=>{pre[l.b].push(l.a);suc[l.a].push(l.b)});
+  const cat=g=>{const s=SHORT(g.model);if(s==='CAM')return 0;if(/Wireless|Conversores/.test(g.cat)||/vMix|Playback|GC/.test(g.model))return 1;if(s==='VH')return 2;if(s==='ATEM'||/LED/.test(g.cat))return 3;return 4};
+  const rank={},st={};const visit=id=>{if(st[id]===2)return rank[id];if(st[id]===1)return 0;st[id]=1;let r=0;pre[id].forEach(q=>{r=Math.max(r,visit(q)+1)});st[id]=2;return rank[id]=r};
+  G.forEach(g=>visit(g.id));
+  /* fontes puras ficam junto do primeiro destino; quem não tem sinal vai para a última coluna */
+  G.forEach(g=>{if(!pre[g.id].length&&suc[g.id].length){const m=Math.min(...suc[g.id].map(q=>rank[q]));rank[g.id]=Math.max(0,m-1)}});
+  const loose=G.filter(g=>!pre[g.id].length&&!suc[g.id].length),maxR=Math.max(0,...G.filter(g=>!loose.includes(g)).map(g=>rank[g.id]));
+  loose.forEach(g=>{rank[g.id]=sig.length?maxR+1:cat(g)});
+  const cols=[];G.forEach(g=>{(cols[rank[g.id]]=cols[rank[g.id]]||[]).push(g)});
+  const C=cols.filter(Boolean),pos={};
+  const place=()=>C.forEach((arr,ci)=>{let y=40;arr.forEach(g=>{g.x=40+ci*(PW+150);g.y=y;pos[g.id]=y+nodeH(g)/2;y+=nodeH(g)+28})});
+  const bary=(g,nb,dflt)=>{const v=nb[g.id].filter(q=>pos[q]!=null);return v.length?v.reduce((a,q)=>a+pos[q],0)/v.length:dflt};
+  C.forEach(arr=>arr.sort((a,b)=>cat(a)-cat(b)||a.name.localeCompare(b.name,'pt',{numeric:true})));place();
+  for(let it=0;it<3;it++){
+    C.forEach((arr,ci)=>{if(ci)arr.sort((a,b)=>bary(a,pre,pos[a.id])-bary(b,pre,pos[b.id]))});place();
+    [...C].reverse().forEach((arr,ri)=>{if(ri)arr.sort((a,b)=>bary(a,suc,pos[a.id])-bary(b,suc,pos[b.id]))});place();
+  }
+  /* centraliza colunas curtas na altura da mais alta */
+  const hgt=arr=>arr.reduce((a,g)=>a+nodeH(g)+28,0),H=Math.max(...C.map(hgt));C.forEach(arr=>{const off=Math.round((H-hgt(arr))/2/8)*8;arr.forEach(g=>g.y+=off)});
 }
 function drawPatch(){
   const p=cur(),W=$('#pWorld');if(!W)return;
@@ -870,7 +894,7 @@ function drawPatch(){
   let cables='';const warnL=new Set(linkIssues(p).map(i=>i.l.id));
   p.links.forEach(l=>{const a=gearById(l.a),b=gearById(l.b);if(!a||!b)return;const A=portXY(a,'outs',l.ap),B=portXY(b,'ins',l.bp);if(!A||!B)return;
     const dim=(tr&&!tr.links.has(l.id))||(focus&&l.a!==focus&&l.b!==focus);
-    cables+=`<path class="cable ${dim?'dim':''} ${pSel===l.id?'sel':''}" data-l="${l.id}" d="${cablePath(A,B)}" stroke="${SIG[l.type]||'#ccc'}" style="color:${SIG[l.type]}" ${warnL.has(l.id)?'stroke-dasharray="7 5"':''}/>`;if(warnL.has(l.id)){const mx=(A[0]+B[0])/2,my=(A[1]+B[1])/2;cables+=`<g transform="translate(${mx},${my})" pointer-events="none"><circle r="9" fill="#ffb21e"/><text y="4" text-anchor="middle" font-size="12" font-weight="800" fill="#120c00" font-family="Arial">!</text></g>`}});
+    cables+=`<path class="cable ${dim?'dim':''} ${pSel===l.id?'sel':''}" data-l="${l.id}" d="${cablePath(A,B,a,b)}" stroke="${SIG[l.type]||'#ccc'}" style="color:${SIG[l.type]}" ${warnL.has(l.id)?'stroke-dasharray="7 5"':''}/>`;if(warnL.has(l.id)){const mx=(A[0]+B[0])/2,my=(A[1]+B[1])/2;cables+=`<g transform="translate(${mx},${my})" pointer-events="none"><circle r="9" fill="#ffb21e"/><text y="4" text-anchor="middle" font-size="12" font-weight="800" fill="#120c00" font-family="Arial">!</text></g>`}});
   let nodes='';
   const rackName=id=>((p.racks||[]).find(r=>r.id===id)||{}).name;
   [...p.gear].sort((a,b)=>(a.expanded?1:0)-(b.expanded?1:0)).forEach(g=>{
@@ -915,7 +939,7 @@ function startNodeDrag(e,g){
   e.stopPropagation();dragging=true;const sx=e.clientX,sy=e.clientY,ox=g.x,oy=g.y;const el=e.currentTarget;el.setPointerCapture(e.pointerId);
   const mv=ev=>{g.x=Math.round((ox+(ev.clientX-sx)/pv.k)/8)*8;g.y=Math.round((oy+(ev.clientY-sy)/pv.k)/8)*8;
     const node=$(`#pWorld .node[data-g="${g.id}"]`);node.setAttribute('transform',`translate(${g.x},${g.y})`);
-    cur().links.forEach(l=>{if(l.a!==g.id&&l.b!==g.id)return;const a=gearById(l.a),b=gearById(l.b);const A=portXY(a,'outs',l.ap),B=portXY(b,'ins',l.bp);const c=$(`#pWorld .cable[data-l="${l.id}"]`);if(c&&A&&B)c.setAttribute('d',cablePath(A,B))})};
+    cur().links.forEach(l=>{if(l.a!==g.id&&l.b!==g.id)return;const a=gearById(l.a),b=gearById(l.b);const A=portXY(a,'outs',l.ap),B=portXY(b,'ins',l.bp);const c=$(`#pWorld .cable[data-l="${l.id}"]`);if(c&&A&&B)c.setAttribute('d',cablePath(A,B,a,b))})};
   const up=()=>{dragging=false;el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);save()};
   el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);
 }
@@ -994,7 +1018,7 @@ function floorSVG(p,opts={}){
   <defs><pattern id="fg" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="${opts.print?'#ddd':'#12201a'}" stroke-width="1"/></pattern></defs>
   <rect width="${FW}" height="${FH}" fill="${opts.print?'#fff':'#06100b'}"/>${f.img?`<image href="${f.img}" width="${FW}" height="${FH}" preserveAspectRatio="xMidYMid meet" opacity="${opts.print?1:.55}"/>`:`<rect width="${FW}" height="${FH}" fill="url(#fg)"/>`}`;
   f.items.filter(i=>i.kind==='stage').forEach(it=>{const sw=fSel===it.id?2.5:1.4,rd=['round','oval','semi','arena'].includes(it.shape);
-    s+=`<g class="fi" data-id="${it.id}" transform="translate(${it.x},${it.y}) rotate(${+it.angle||0})">${stageShape(it,`fill="rgba(255,178,30,.08)" stroke="#ffb21e" stroke-dasharray="6 5" stroke-width="${sw}"`)}<text y="${it.shape==='semi'?-it.h/4+6:it.shape==='arena'?-it.w/2+30:rd?6:-it.h/2+24}" text-anchor="middle" fill="#ffb21e" font-family="Archivo,Arial Narrow,Arial,sans-serif" font-weight="800" font-size="18" font-stretch="70%" letter-spacing="2">${esc(it.name.toUpperCase())}</text></g>`});
+    s+=`<g class="fi" data-id="${it.id}" transform="translate(${it.x},${it.y}) rotate(${+it.angle||0})">${stageShape(it,`fill="rgba(255,178,30,.08)" stroke="#ffb21e" stroke-dasharray="6 5" stroke-width="${sw}"`)}${fSel===it.id&&!opts.print?`<g class="rot" data-rot="1"><line y1="${-(['round','arena'].includes(it.shape)?it.w/2:it.h/2)}" y2="${-(['round','arena'].includes(it.shape)?it.w/2:it.h/2)-30}" stroke="#ffb21e" stroke-width="1.4"/><circle cy="${-(['round','arena'].includes(it.shape)?it.w/2:it.h/2)-38}" r="9" fill="#1a1406" stroke="#ffb21e" stroke-width="2"/><path d="M-4 ${-(['round','arena'].includes(it.shape)?it.w/2:it.h/2)-41} a4.5 4.5 0 1 0 5 0" fill="none" stroke="#ffb21e" stroke-width="1.6"/><title>Arraste para girar (Shift = sem encaixe)</title></g>`:''}<text y="${it.shape==='semi'?-it.h/4+6:it.shape==='arena'?-it.w/2+30:rd?6:-it.h/2+24}" text-anchor="middle" fill="#ffb21e" font-family="Archivo,Arial Narrow,Arial,sans-serif" font-weight="800" font-size="18" font-stretch="70%" letter-spacing="2">${esc(it.name.toUpperCase())}</text></g>`});
   f.items.filter(i=>i.kind==='cam').forEach(it=>{const fov=fovOf(it),h=fov/2*Math.PI/180,a=it.angle*Math.PI/180,r=+it.reach||250;
     const x1=Math.cos(a-h)*r,y1=Math.sin(a-h)*r,x2=Math.cos(a+h)*r,y2=Math.sin(a+h)*r;
     s+=`<g class="fi" data-id="${it.id}" transform="translate(${it.x},${it.y})" opacity="${opts.hl&&opts.hl!==it.id?0.22:1}">
@@ -1047,12 +1071,15 @@ function floorInsp(it,p){
     ${sh==='round'||sh==='arena'?`<label class="f"><span>Diâmetro (px)${m(it.w)}</span><input class="in num" type="number" min="20" data-k="w" value="${it.w}"></label>`:`<div class="row"><label class="f"><span>Largura (px)</span><input class="in num" type="number" min="20" data-k="w" value="${it.w}"></label><label class="f"><span>Profundidade (px)</span><input class="in num" type="number" min="20" data-k="h" value="${it.h}"></label></div>${f.scale?`<p class="note">${meters(it.w,f.scale)} × ${meters(it.h,f.scale)}</p>`:''}`}
     ${sh==='arena'?`<label class="f"><span>Centro / palco interno · ${+it.inner||40}% do diâmetro</span><input type="range" min="0" max="80" data-k="inner" value="${+it.inner||40}"></label>`:''}
     ${sh==='thrust'?`<div class="row"><label class="f"><span>Passarela: comprimento (px)${m(+it.rl||it.h)}</span><input class="in num" type="number" min="10" data-k="rl" value="${+it.rl||it.h}"></label><label class="f"><span>Largura (px)</span><input class="in num" type="number" min="10" data-k="rw" value="${+it.rw||Math.round(it.w*.18)}"></label></div><label class="row" style="gap:8px;font-size:12.5px;margin:0 0 12px;cursor:pointer"><input type="checkbox" data-k="thrustEnd" ${it.thrustEnd?'checked':''}> Ponta redonda no fim da passarela</label>`:''}
-    <label class="f"><span>Rotação · ${Math.round(+it.angle||0)}°</span><input type="range" min="-180" max="180" step="5" data-k="angle" value="${+it.angle||0}"></label>
+    <label class="f"><span>Rotação · ${Math.round(+it.angle||0)}°</span><input type="range" min="-180" max="180" step="1" data-k="angle" value="${+it.angle||0}"></label>
+    <div class="row" style="gap:6px;margin:-4px 0 14px">${[-45,-15,15,45].map(d=>`<button class="btn sm" data-rotby="${d}">${d>0?'+':'−'}${Math.abs(d)}°</button>`).join('')}<button class="btn sm" data-rotby="0">Zerar</button></div>
+    <p class="note" style="margin-top:-6px">Ou arraste a alça redonda acima do palco na planta. Segure Shift para girar sem encaixe de 5°.</p>
     <button class="btn danger" data-del>Remover</button>`}
   return `<h3>${esc(it.name)}</h3><p class="sub">Pessoa / alvo</p><label class="f"><span>Nome</span><input class="in" data-k="name" value="${esc(it.name)}"></label>${p.floor.items.filter(c=>c.kind==='cam').map(c=>`<div class="row" style="justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(c.name)}</span><span class="num" style="color:var(--soft)">${meters(Math.hypot(c.x-it.x,c.y-it.y),f.scale)}</span></div>`).join('')}<p class="note">Distância de cada câmera até este ponto.</p><button class="btn danger" data-del>Remover</button>`;
 }
 function bindFloorInsp(it,p){
   if(!it)return;
+  $$('#fInsp [data-rotby]').forEach(b=>b.onclick=()=>{const d=+b.dataset.rotby;it.angle=d?((((+it.angle||0)+d)+180)%360+360)%360-180:0;save();R.floor()});
   $$('#fInsp [data-shape]').forEach(b=>b.onclick=()=>{const k=b.dataset.shape;it.shape=k;if((k==='round'||k==='arena')){it.h=it.w}save();R.floor()});
   $$('#fInsp [data-k]').forEach(inp=>{const k=inp.dataset.k;const fn=()=>{it[k]=inp.type==='checkbox'?inp.checked:inp.type==='range'||inp.type==='number'?+inp.value:inp.value;if(it.kind==='stage'&&k==='w'&&(it.shape==='round'||it.shape==='arena'))it.h=it.w;if(k==='gearId'&&inp.value){it.name=gearById(inp.value).name}save();
     if(inp.type==='range'){const svgOld=$('#fSvg');svgOld.outerHTML=floorSVG(p,{id:'fSvg'});bindFloorDrag();const lbl=inp.closest('label').querySelector('span');lbl.textContent=it.kind==='stage'?(k==='angle'?`Rotação · ${Math.round(it.angle)}°`:`Centro / palco interno · ${it.inner}% do diâmetro`):k==='angle'?`Direção · ${Math.round((it.angle%360+360)%360)}°`:`Alcance desenhado · ${meters(it.reach,p.floor.scale)}`}else R.floor()};
@@ -1065,9 +1092,13 @@ function bindFloorDrag(){
     const pt=svgPt(svg,e);
     if(fCal){if(!fCal.a){fCal.a=[pt.x,pt.y];R.floor();return}const px=Math.hypot(pt.x-fCal.a[0],pt.y-fCal.a[1]);fCal=null;ask('Calibrar escala',[{k:'m',label:`Distância real entre os dois pontos (${Math.round(px)} px), em metros`,v:'',type:'number'}],v=>{const m=parseFloat(String(v.m).replace(',','.'));if(m>0){f.scale=m/px;save();toast('Escala calibrada');}R.floor()});return}
     const g=e.target.closest('.fi');if(!g){if(fSel){fSel=null;R.floor()}return}
-    const it=f.items.find(i=>i.id===g.dataset.id);if(fSel!==it.id){fSel=it.id;R.floor();return}
+    const it=f.items.find(i=>i.id===g.dataset.id);
+    if(e.target.closest('[data-rot]')&&it.kind==='stage'){svg.setPointerCapture(e.pointerId);const lab=$('#fInsp input[data-k=angle]');
+      svg.onpointermove=ev=>{const q=svgPt(svg,ev);let a=Math.atan2(q.y-it.y,q.x-it.x)*180/Math.PI+90;a=((a+180)%360+360)%360-180;if(!ev.shiftKey)a=Math.round(a/5)*5;it.angle=Math.round(a);g.setAttribute('transform',`translate(${it.x},${it.y}) rotate(${it.angle})`);if(lab){lab.value=it.angle;const sp=lab.closest('label').querySelector('span');if(sp)sp.textContent=`Rotação · ${it.angle}°`}};
+      svg.onpointerup=()=>{svg.onpointermove=null;svg.onpointerup=null;save();R.floor()};return}
+    if(fSel!==it.id){fSel=it.id;R.floor();return}
     const ox=it.x-pt.x,oy=it.y-pt.y;svg.setPointerCapture(e.pointerId);
-    svg.onpointermove=ev=>{const q=svgPt(svg,ev);it.x=clamp(q.x+ox,0,FW);it.y=clamp(q.y+oy,0,FH);g.setAttribute('transform',`translate(${it.x},${it.y})`)};
+    svg.onpointermove=ev=>{const q=svgPt(svg,ev);it.x=clamp(q.x+ox,0,FW);it.y=clamp(q.y+oy,0,FH);g.setAttribute('transform',`translate(${it.x},${it.y})${it.kind==='stage'?` rotate(${+it.angle||0})`:''}`)};
     svg.onpointerup=()=>{svg.onpointermove=null;svg.onpointerup=null;save();R.floor()};
   };
 }
@@ -1430,7 +1461,7 @@ function patchSVGPrint(p){
   if(!p.gear.length)return '';
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;p.gear.forEach(g=>{x0=Math.min(x0,g.x);y0=Math.min(y0,g.y);x1=Math.max(x1,g.x+PW);y1=Math.max(y1,g.y+nodeH(g))});
   const pad=30,W=x1-x0+pad*2,H=y1-y0+pad*2;let s=`<svg viewBox="${x0-pad} ${y0-pad} ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Archivo,Arial,sans-serif"><rect x="${x0-pad}" y="${y0-pad}" width="${W}" height="${H}" fill="#fff"/>`;
-  p.links.forEach(l=>{const a=gearById(l.a),b=gearById(l.b);if(!a||!b)return;const A=portXY(a,'outs',l.ap),B=portXY(b,'ins',l.bp);if(A&&B)s+=`<path d="${cablePath(A,B)}" fill="none" stroke="${PSIG[l.type]||'#333'}" stroke-width="2.2"/>`});
+  p.links.forEach(l=>{const a=gearById(l.a),b=gearById(l.b);if(!a||!b)return;const A=portXY(a,'outs',l.ap),B=portXY(b,'ins',l.bp);if(A&&B)s+=`<path d="${cablePath(A,B,a,b)}" fill="none" stroke="${PSIG[l.type]||'#333'}" stroke-width="2.2"/>`});
   p.gear.forEach(g=>{const h=nodeH(g);s+=`<g transform="translate(${g.x},${g.y})"><rect width="${PW}" height="${h}" rx="5" fill="#fff" stroke="#333"/><rect width="${PW}" height="${PH-4}" rx="5" fill="#eef2ef"/><rect width="4" height="${PH-4}" fill="${CAT_COLOR[g.cat]||'#999'}"/><text x="12" y="15" font-weight="800" font-size="13" fill="#111">${esc(g.name.slice(0,22))}</text><text x="12" y="27" font-size="9.5" fill="#555">${esc(g.model.slice(0,32))}</text>`;
     const used=new Set(p.links.flatMap(l=>[l.ap,l.bp]));
     ['ins','outs'].forEach(side=>{for(let i=0;i<visN(g,side);i++){const pt=g[side][i],y=PH+i*PR+PR/2+4,x=side==='outs'?PW:0;s+=`<circle cx="${x}" cy="${y}" r="4.2" fill="${used.has(pt.id)?PSIG[pt.type]||'#333':'#fff'}" stroke="${PSIG[pt.type]||'#333'}" stroke-width="1.4"/><text x="${side==='outs'?PW-10:10}" y="${y+3.5}" text-anchor="${side==='outs'?'end':'start'}" font-size="9.5" fill="${used.has(pt.id)?'#111':'#999'}">${esc(pt.name.slice(0,14))}</text>`}});
