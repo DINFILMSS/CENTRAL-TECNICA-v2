@@ -764,11 +764,11 @@ R.gear=()=>{
         <td class="num" style="color:var(--soft);white-space:nowrap">${x.ins.length} → ${x.outs.length}</td>
         <td><input class="in num" data-f="watts" value="${esc(x.watts)}" placeholder="—" style="width:70px" title="${esc((WSRC[x.wsrc]||[''])[0])}"> <span class="pill ${(WSRC[x.wsrc]||[0,'red'])[1]}" style="font-size:10.5px;padding:1px 6px"><i></i>${x.wsrc==='fab'?'fab.':x.wsrc==='aprox'?'aprox.':x.wsrc==='manual'?'inf.':'—'}</span></td>
         <td><select class="in" data-f="status" style="width:auto">${[['ok','Conferido'],['pend','A conferir'],['res','Reserva']].map(([v,l])=>`<option value="${v}" ${x.status===v?'selected':''}>${l}</option>`).join('')}</select></td>
-        <td style="white-space:nowrap"><button class="btn sm ghost" data-a="edit">Portas</button> <button class="btn sm ghost" data-a="dup" title="Duplicar">⧉</button> <button class="btn sm danger" data-a="del" title="Remover">✕</button></td></tr>`).join('')).join('')}
+        <td style="white-space:nowrap"><button class="btn sm ghost" data-a="edit">Portas</button> <button class="btn sm ghost" data-a="swap" title="Substituir por outro modelo, mantendo nome e cabos do patch">⇄</button> <button class="btn sm ghost" data-a="dup" title="Duplicar">⧉</button> <button class="btn sm danger" data-a="del" title="Remover">✕</button></td></tr>`).join('')).join('')}
       </tbody></table>`:`<div class="empty" style="margin:10px"><b>Nenhum equipamento no projeto</b>Clique num modelo do catálogo à esquerda para adicionar.</div>`}
     </div>
     ${g?`<div class="panel" id="gInsp">
-      <header class="row" style="justify-content:space-between"><h3>${esc(g.name)}</h3><button class="btn sm ghost" id="gClose">Fechar</button></header>
+      <header class="row" style="justify-content:space-between"><h3>${esc(g.name)}</h3><div class="row" style="gap:6px"><button class="btn sm" id="gSwap">⇄ Substituir modelo</button><button class="btn sm ghost" id="gClose">Fechar</button></div></header>
       <p class="sub">${esc(g.model)}</p>
       <div class="ports">
         <div><b style="font-size:12.5px;color:var(--soft)">Entradas (${g.ins.length})</b>${g.ins.map((pt,i)=>portRow(pt,'ins',i)).join('')}<button class="btn sm ghost" data-add="ins" style="margin-top:6px">+ Entrada</button></div>
@@ -785,11 +785,13 @@ R.gear=()=>{
     const x=gearById(tr.dataset.id);
     tr.querySelectorAll('[data-f]').forEach(inp=>inp.onchange=()=>{x[inp.dataset.f]=inp.value;if(inp.dataset.f==='watts')x.wsrc='manual';save();if(inp.dataset.f!=='name')renderRail()});
     tr.querySelector('[data-a=edit]').onclick=()=>{gearSel=x.id;R.gear()};
+    tr.querySelector('[data-a=swap]').onclick=()=>swapDialog(p,x);
     tr.querySelector('[data-a=dup]').onclick=()=>{const c=JSON.parse(JSON.stringify(x));c.id=uid();c.name=x.name+' (2)';c.ins.forEach(q=>q.id=uid());c.outs.forEach(q=>q.id=uid());c.x+=40;c.y+=40;p.gear.push(c);save();render()};
     tr.querySelector('[data-a=del]').onclick=()=>{confirmBox(`Remover ${x.name} e as ${p.links.filter(l=>l.a===x.id||l.b===x.id).length} ligação(ões) dele?`,'Remover',()=>{p.gear=p.gear.filter(y=>y!==x);p.links=p.links.filter(l=>l.a!==x.id&&l.b!==x.id);save();render()})};
   });
   if(g){
     $('#gClose').onclick=()=>{gearSel=null;R.gear()};
+    $('#gSwap').onclick=()=>swapDialog(p,g);
     $$('#gInsp [data-pi]').forEach(inp=>{const [side,i,f]=inp.dataset.pi.split(':');inp.onchange=()=>{g[side][+i][f]=inp.value;save();if(f==='type')R.gear()}});
     $$('#gInsp [data-px]').forEach(b=>b.onclick=()=>{const [side,i]=b.dataset.px.split(':');const pt=g[side][+i];p.links=p.links.filter(l=>l.ap!==pt.id&&l.bp!==pt.id);g[side].splice(+i,1);save();R.gear()});
     $$('#gInsp [data-add]').forEach(b=>b.onclick=()=>{const s=b.dataset.add;g[s].push(P((s==='ins'?'IN ':'OUT ')+(g[s].length+1)));save();R.gear()});
@@ -800,6 +802,62 @@ R.gear=()=>{
   $('#gCustom').onclick=()=>ask('Equipamento fora do catálogo',[{k:'model',label:'Modelo',v:''},{k:'name',label:'Nome operacional',v:''},{k:'ins',label:'Quantidade de entradas',v:'2',type:'number'},{k:'outs',label:'Quantidade de saídas',v:'2',type:'number'}],v=>{if(!v.model)return;const g=addGearTo(p,v.model,v.name||undefined);g.ins=seq('IN',+v.ins||0);g.outs=seq('OUT',+v.outs||0);save();gearSel=g.id;render()},'Adicionar');
 };
 function portRow(pt,side,i){return `<div class="port"><i style="width:8px;height:8px;border-radius:50%;background:${SIG[pt.type]||'#999'};flex:none"></i><input class="in" style="padding:4px 6px;font-size:12px" data-pi="${side}:${i}:name" value="${esc(pt.name)}"><select class="in" style="width:62px;padding:4px;font-size:11px" data-pi="${side}:${i}:type">${SIGS.map(s=>`<option ${s===pt.type?'selected':''}>${s}</option>`).join('')}</select><button class="x" data-px="${side}:${i}" title="Remover porta">✕</button></div>`}
+/* ---------- substituir modelo (mantém id, nome, cabos, rack, equipe) ---------- */
+function swapPlan(p,g,model,keepPorts,dropMissing){
+  const nw=keepPorts?{ins:g.ins.map(x=>({...x})),outs:g.outs.map(x=>({...x}))}:portsFor(model,catOf(model));const kept=[],lost=[];
+  ['ins','outs'].forEach(side=>{
+    const key=side==='ins'?'bp':'ap',used=new Set(),olds=g[side],news=nw[side];
+    const linked=olds.filter(pt=>p.links.some(l=>l[key]===pt.id));
+    const ordinal=(arr,pt)=>arr.filter(x=>x.type===pt.type).indexOf(pt);
+    const pick=pt=>{const free=news.filter(x=>!used.has(x));const nm=String(pt.name).trim().toLowerCase();
+      const vid=['SDI','HDMI'];return free.find(x=>x.type===pt.type&&String(x.name).trim().toLowerCase()===nm)||free.find(x=>x.type===pt.type&&ordinal(news,x)===ordinal(olds,pt))||free.find(x=>x.type===pt.type)||(vid.includes(pt.type)?free.find(x=>vid.includes(x.type)):null)};
+    linked.forEach(pt=>{const n=pick(pt);const ls=p.links.filter(l=>l[key]===pt.id);if(n){used.add(n);n.id=pt.id;kept.push({side,from:pt.name,to:n.name,conv:n.type!==pt.type?n.type:'',links:ls})}
+      else if(!dropMissing){const x={id:pt.id,name:pt.name,type:pt.type,extra:true};news.push(x);used.add(x);kept.push({side,from:pt.name,to:pt.name,made:true,links:ls})}
+      else lost.push({side,from:pt.name,type:pt.type,links:ls})});
+  });
+  return {ins:nw.ins,outs:nw.outs,kept,lost};
+}
+function applySwap(p,g,model,keepPorts,dropMissing){
+  const old=g.model,pl=swapPlan(p,g,model,keepPorts,dropMissing),cat=keepPorts&&!catOf(model)?g.cat:catOf(model);
+  const lostIds=new Set(pl.lost.flatMap(x=>x.links.map(l=>l.id)));p.links=p.links.filter(l=>!lostIds.has(l.id));
+  const pw=powerOf(model,cat),hOld=nodeH(g);
+  Object.assign(g,{model,cat,ins:pl.ins,outs:pl.outs});
+  if(g.wsrc!=='manual'||!keepPorts){g.watts=String(pw.w);g.wsrc=pw.src}
+  if(g.rack){if(!g.rackU||g.rackU===rackU(old))g.rackU=rackU(model);(p.racks||[]).forEach(r=>(r.items||[]).forEach(it=>{if(it.gid===g.id){it.model=model;if(!it.u||+it.u===rackU(old))it.u=rackU(model);it.w=rackWid(model)}}))}
+  /* empurra para baixo quem estava logo abaixo no patch, se o equipamento cresceu */
+  const dh=nodeH(g)-hOld;if(dh>0)p.gear.forEach(o=>{if(o!==g&&Math.abs(o.x-g.x)<PW&&o.y>g.y)o.y+=dh});
+  return pl;
+}
+function swapDialog(p,g){
+  const all=Object.values(CATALOG).flat(),same=p.gear.filter(x=>x!==g&&x.model===g.model);let q='',sel=null,drop=false;
+  const draw=()=>{
+    const list=q?all.filter(m=>m.toLowerCase().includes(q.toLowerCase())&&m!==g.model).slice(0,40):[];
+    const custom=q.trim()&&!all.some(m=>m.toLowerCase()===q.trim().toLowerCase());
+    let prev='';
+    if(sel){const pl=swapPlan(p,g,sel.m,sel.keep,drop),nl=pl.kept.reduce((a,x)=>a+x.links.length,0),ll=pl.lost.reduce((a,x)=>a+x.links.length,0);
+      const other=(l,side)=>{const o=gearById(side==='ins'?l.a:l.b);return o?o.name:'?'};
+      prev=`<div class="swp"><p style="margin:0 0 8px"><b>${esc(g.model)}</b> → <b style="color:var(--acc,#2eff7e)">${esc(sel.m)}</b>${sel.keep?' · mantém as portas atuais':` · ${pl.ins.length} entradas, ${pl.outs.length} saídas`}</p>
+        ${pl.kept.length||pl.lost.length?`<table class="t" style="font-size:12.5px">${pl.kept.map(k=>`<tr${k.made||k.conv?' style="color:var(--amber,#ffb21e)"':''}><td>${esc(k.from)}</td><td style="${k.made||k.conv?'':'color:var(--soft)'}">${k.made?'porta criada (conferir)':k.conv?`→ ${esc(k.to)} · precisa conversor`:`→ ${esc(k.to)}`}</td><td style="color:var(--soft)">${k.links.map(l=>esc(other(l,k.side))).join(', ')}</td></tr>`).join('')}${pl.lost.map(k=>`<tr style="color:var(--tally,#ff5a5a)"><td>${esc(k.from)}</td><td>sem porta ${esc(k.type)}</td><td>cabo com ${k.links.map(l=>esc(other(l,k.side))).join(', ')} sai do patch</td></tr>`).join('')}</table>`:'<p class="note">Este equipamento não tem cabos no patch.</p>'}
+        <p class="note" style="margin-top:8px">${nl} cabo(s) mantido(s)${ll?`, <b style="color:var(--tally,#ff5a5a)">${ll} sairão do patch</b>`:''}. Nome, rack, equipe, multiview e posição continuam iguais.</p>
+        ${pl.kept.some(k=>k.made)||drop?`<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0 0;font-size:13px;color:var(--soft);cursor:pointer"><input type="checkbox" id="swDrop" style="margin-top:2px;flex:none" ${drop?'checked':''}> Remover os cabos que não têm porta no modelo novo (em vez de criar a porta)</label>`:''}</div>`}
+    $('#modal').innerHTML=`<h3>Substituir ${esc(g.name)}</h3><p class="sub" style="margin:-4px 0 12px">Hoje: ${esc(g.model)}</p>
+      <label class="f"><span>Novo modelo</span><input class="in" id="swQ" placeholder="Buscar no catálogo…" value="${esc(q)}" autocomplete="off"></label>
+      ${!sel&&(list.length||custom)?`<div class="cat-list" style="max-height:240px;overflow:auto;margin:-6px 0 12px">${list.map(m=>`<div class="cat-item" data-sm="${esc(m)}" tabindex="0" role="button">${esc(m)}<span class="plus" style="font-size:12px">${esc(catOf(m))}</span></div>`).join('')}${custom?`<div class="cat-item" data-sc="1" tabindex="0" role="button">Usar “${esc(q.trim())}” mantendo as portas atuais</div>`:''}</div>`:''}
+      ${prev}
+      ${sel&&same.length?`<label style="display:flex;align-items:flex-start;gap:8px;margin:10px 0 0;font-size:13px;cursor:pointer"><input type="checkbox" id="swAll" style="margin-top:2px;flex:none"> Substituir também os outros ${same.length} ${esc(g.model)} do projeto</label>`:''}
+      <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" id="swN">Cancelar</button>${sel?`<button class="btn ghost" id="swB">Outro modelo</button><button class="btn go" id="swY">Substituir</button>`:''}</div>`;
+    const inp=$('#swQ');if(!sel){inp.focus();inp.setSelectionRange(q.length,q.length)}
+    inp.oninput=e=>{q=e.target.value;sel=null;draw()};
+    inp.onkeydown=e=>{if(e.key==='Enter'){const f=$('#modal [data-sm],#modal [data-sc]');f&&f.click()}if(e.key==='Escape')close()};
+    $$('#modal [data-sm]').forEach(el=>el.onclick=el.onkeydown=e=>{if(e.type==='keydown'&&e.key!=='Enter')return;sel={m:el.dataset.sm,keep:false};draw()});
+    $$('#modal [data-sc]').forEach(el=>el.onclick=()=>{sel={m:q.trim(),keep:true};draw()});
+    $('#swN').onclick=close;
+    const dr=$('#swDrop');if(dr)dr.onchange=()=>{drop=dr.checked;draw()};
+    if(sel){$('#swB').onclick=()=>{sel=null;draw()};$('#swY').onclick=()=>{const targets=[g,...($('#swAll')?.checked?same:[])];let lost=0,made=0,conv=0;targets.forEach(x=>{const r=applySwap(p,x,sel.m,sel.keep,drop);lost+=r.lost.reduce((a,k)=>a+k.links.length,0);made+=r.kept.filter(k=>k.made).length;conv+=r.kept.filter(k=>k.conv).length});close();save();render();toast(`${targets.length>1?targets.length+' equipamentos trocados':g.name+' agora é '+sel.m} · ${lost?`${lost} cabo(s) saíram do patch`:'todos os cabos mantidos'}${conv?` · ${conv} precisam de conversor`:''}${made?` · ${made} porta(s) criada(s) para conferir`:''}`)}}
+  };
+  const close=()=>$('#modalBg').classList.remove('open');
+  draw();$('#modalBg').classList.add('open');
+}
 function drawCatalog(){
   const q=catQ.toLowerCase();
   $('#catList').innerHTML=Object.entries(CATALOG).map(([c,items])=>{const f=items.filter(m=>m.toLowerCase().includes(q));if(!f.length)return '';return `<details class="cat-group" ${q?'open':''}><summary><span class="sw" style="background:${CAT_COLOR[c]}"></span>${esc(c)}<em>${f.length}</em></summary>${f.map(m=>`<div class="cat-item" data-m="${esc(m)}" tabindex="0" role="button">${esc(m)}<span class="plus">+</span></div>`).join('')}</details>`}).join('')||'<p class="note">Nenhum modelo encontrado. Use “Equipamento fora do catálogo”.</p>';
