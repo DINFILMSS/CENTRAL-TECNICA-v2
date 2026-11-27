@@ -1,7 +1,7 @@
 {
   "name": "central-tecnica",
   "productName": "Central Técnica",
-  "version": "48.4.0",
+  "version": "48.4.1",
   "description": "Central Técnica by Don — pré-produção de broadcast",
   "author": "Don",
   "license": "UNLICENSED",
@@ -76,7 +76,8 @@
       "identity": "-",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "artifactName": "Central-Tecnica-${version}-mac.${ext}"
+      "artifactName": "Central-Tecnica-${version}-mac.${ext}",
+      "x64ArchFiles": "**/node_modules/@napi-rs/**"
     },
     "dmg": {
       "artifactName": "Central-Tecnica-${version}-mac.${ext}",
